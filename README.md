@@ -1,24 +1,8 @@
-<div align="center">
-
-<img src="banner.png" alt="Studvisor Banner" width="100%" />
-
-<br/><br/>
-
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
-![Claude API](https://img.shields.io/badge/Claude_3-Anthropic-D97706?style=for-the-badge&logo=anthropic&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
-
 # Studvisor: Enterprise Academic ERP & Predictive Student Analytics
 
-A production-grade college enterprise resource planning (ERP) platform combining high-throughput FastAPI services, three-tier role-based access control (RBAC), and Anthropic Claude-3 for automated student dropout risk prediction and contextual academic tutoring.
+A production-grade college enterprise resource planning platform combining high-throughput FastAPI services, three-tier role-based access control, and predictive machine learning models for early dropout risk scoring and contextual academic tutoring.
 
-[Architecture](#backend-architecture) | [Security & RBAC](#security--integrity-layer) | [AI Engine](#ai-engine-and-predictive-analytics) | [Project Structure](#project-structure) | [Deployment](#deployment) | [Attribution](#engineering-attribution)
-
-</div>
+![Studvisor Banner](banner.png)
 
 ---
 
@@ -26,16 +10,46 @@ A production-grade college enterprise resource planning (ERP) platform combining
 
 Higher education administrative systems typically suffer from fragmented databases, poor security audit trails, and reactive rather than predictive student support. Studvisor addresses these institutional bottlenecks by unifying administrative lifecycle management with predictive machine learning algorithms.
 
-The platform provides:
-1. **Predictive Academic Intervention:** Evaluates attendance trajectories, grade volatility, and engagement indicators to compute probabilistic dropout risk scores before mid-term exams.
-2. **Context-Aware LLM Tutoring:** Interfaces Anthropic Claude-3 through streaming Server-Sent Events (SSE) with access to curated institutional syllabus documents and personal performance metrics.
-3. **Hardened Administrative Workflows:** Enforces time-bound attendance modifications with multi-signature head-of-department approval chains and tamper-evident audit logs.
+The platform executes three critical institutional functions:
+1. Predictive Academic Intervention: Nightly pipelines evaluate attendance decay, grade volatility, and engagement indicators to compute probabilistic dropout risk scores before mid-term examinations.
+2. Context-Aware Large Language Model Tutoring: Interfaces Anthropic Claude-3 through streaming Server-Sent Events with curated institutional syllabus documents and personal performance metrics.
+3. Hardened Administrative Workflows: Enforces strict time-bound attendance modifications with multi-signature head-of-department approval chains and tamper-evident audit logs.
 
 ---
 
-## Backend Architecture
+## Predictive Analytics & Model Performance
 
-```
+The predictive intelligence layer identifies academic disengagement before it results in course failure or withdrawal. The evaluation pipeline benchmarks multiple classification algorithms against historical student performance data.
+
+### 1. Classifier Benchmarking & ROC Evaluation
+
+Model selection benchmarks Gradient Boosting, Random Forest, Logistic Regression, and Support Vector Machines across standardized evaluation folds. Gradient Boosting achieved superior discrimination across imbalanced cohort records.
+
+![Model Comparison](docs/plots/model_comparison.png)
+
+The Receiver Operating Characteristic curves illustrate true positive versus false positive rates across decision thresholds. The primary model maintains an Area Under the Curve exceeding 0.91.
+
+![ROC Curves](docs/plots/roc_curves.png)
+
+### 2. Feature Attribution & Risk Stratification
+
+Feature importance analysis isolates the primary signals driving academic vulnerability. Attendance trajectory, mid-term assessment performance, and lab practical completion rates constitute over sixty percent of the composite risk weighting.
+
+![Feature Importance](docs/plots/feature_importance.png)
+
+The risk distribution profile stratifies student cohorts into actionable intervention tiers, allowing department advisors to prioritize counseling resources effectively.
+
+![Risk Distribution](docs/plots/risk_distribution.png)
+
+The confusion matrix confirms high recall on at-risk classifications, minimizing false negatives where failing students might otherwise go undetected.
+
+![Confusion Matrix](docs/plots/confusion_matrix.png)
+
+---
+
+## System Architecture
+
+```text
 [ Frontend: React 18 + Vite + TailwindCSS ]
                      |
                      | (RESTful JSON / SSE Streaming / JWT Bearer)
@@ -58,42 +72,40 @@ The platform provides:
 
 ---
 
-## Security & Integrity Layer
+## Security & Access Control
 
-- **Three-Layer RBAC Architecture:** Security policies are enforced hierarchically:
-  1. Cryptographic JWT signature and expiration verification.
-  2. Route-level endpoint dependency guards restricting access by user role (`Admin`, `Faculty`, `Student`).
-  3. Database-level tenant and cohort scoping preventing lateral data leaks.
-- **Audit Middleware:** All state-modifying requests (`POST`, `PUT`, `DELETE`, `PATCH`) are logged with actor identity, timestamp, originating IP, and affected entity identifiers.
-- **Attendance Integrity:** Implements a strict 24-hour edit window. Retrospective modifications require formal digital sign-off from designated academic supervisors.
-- **Rotating HMAC Anonymity:** Campus forum interactions utilize daily rotating salts to prevent correlation analysis and identity de-anonymization.
+Studvisor implements defense-in-depth across the API and persistence layers:
 
----
-
-## AI Engine and Predictive Analytics
-
-### 1. Predictive Risk Engine
-Nightly batch jobs evaluate multi-dimensional student performance metrics to identify at-risk cohorts:
-- Attendance slope and decay velocity.
-- Continuous internal assessment variances.
-- Assignment submission delay indicators.
-
-### 2. Context-Aware LLM Tutoring
-The platform integrates Anthropic Claude-3 via streaming APIs:
-- Synthesizes personalized academic roadmaps based on historical performance gaps.
-- Automates exam paper generation aligned with syllabus coverage and Bloom's Taxonomy.
-- Routes student grievances automatically based on sentiment severity scores.
+1. Cryptographic Authentication: Stateless JSON Web Tokens with HS256 signatures, short lifespans, and automated refresh rotation.
+2. Endpoint Authorization Guards: Strict FastAPI dependency injection verifying user roles across Admin, Faculty, and Student tiers.
+3. Attendance Audit Lockout: Strict twenty-four hour edit window on lecture registers. Retrospective modifications require formal digital sign-off from designated academic supervisors.
+4. Tamper-Evident Audit Logging: Middleware records actor identity, timestamp, originating IP address, HTTP method, and affected database records for all state-modifying requests.
+5. Forum Identity Protection: Daily rotating HMAC salts shield student identities on internal academic grievance forums.
 
 ---
 
-## Project Structure
+## Data Model Specifications
+
+The persistence layer defines forty-five relational schemas mapped through SQLAlchemy 2.0 and versioned with Alembic migrations:
+
+| Entity Category | Primary Schemas | Operational Responsibility |
+|---|---|---|
+| Identity & Access | Users, Roles, Permissions, Sessions | Credentials, token validation, and administrative delegation |
+| Academic Registry | Departments, Courses, Semesters, Sections | Institutional structural hierarchy and syllabus mapping |
+| Performance | AttendanceLogs, InternalMarks, ExamResults | Time-series lecture attendance and continuous evaluations |
+| Predictive Risk | RiskPredictions, FeatureSnapshots, Alerts | Batch inference outputs, feature importance records, early warnings |
+| Intelligent Tutoring | Conversations, SyllabiEmbeddings, Queries | Vector retrieval context, Claude-3 prompt history, RAG documents |
+
+---
+
+## Repository Structure
 
 ```text
 Studvisor/
 ├── backend/
 │   ├── api/
-│   │   ├── routes/          # RBAC-guarded endpoint controllers
-│   │   │   ├── admin.py     # Institutional analytics and user management
+│   │   ├── routes/
+│   │   │   ├── admin.py     # Institutional analytics and user administration
 │   │   │   ├── faculty.py   # Grade records, attendance rosters, and class metrics
 │   │   │   ├── student.py   # Profiles, engagement checks, and study plans
 │   │   │   ├── ai_engine.py # Claude-3 orchestration and streaming endpoints
@@ -108,76 +120,64 @@ Studvisor/
 │   │   ├── merit.py         # Gamified progression system
 │   │   └── timetable.py     # Automated scheduling constraint solver
 │   └── app/
-│       ├── models.py        # 45+ SQLAlchemy relational schemas
+│       ├── models.py        # SQLAlchemy relational schemas
 │       └── schemas.py       # Pydantic data validation models
-├── frontend/                # React / Vite / Tailwind UI application
+├── frontend/                # React, Vite, and TailwindCSS interface
+├── docs/plots/              # Model training curves and evaluation charts
 ├── tests/                   # Automated pytest unit and integration suites
 ├── alembic/                 # Database schema migration versions
 ├── docker-compose.yml       # Production multi-container specification
-└── Dockerfile
+└── Dockerfile               # Container build definition
 ```
 
 ---
 
-## Deployment
+## Local Development & Setup
 
-### Prerequisites
-- Python 3.10+
-- PostgreSQL 14+
-- Docker & Docker Compose (optional for containerized deployment)
-
-### Local Development Setup
-
+### 1. Repository Setup
 ```bash
-# 1. Clone the repository
 git clone https://github.com/harctik/Studvisor.git
 cd Studvisor
-
-# 2. Virtual Environment Setup
 python -m venv venv
+
 # Windows:
 venv\Scripts\activate
 # Linux/macOS:
 source venv/bin/activate
 
 pip install -r requirements.txt
+```
 
-# 3. Environment Configuration
+### 2. Configuration & Database Initialization
+```bash
 cp .env.example .env
-
-# 4. Seed Database
 python -m backend.seed_all
+```
 
-# 5. Start Server
+### 3. Launching the Backend Service
+```bash
 uvicorn backend.main:app --reload --port 8000
 ```
 
-### Containerized Deployment
+### 4. Executing the Test Suite
+```bash
+pytest tests/ -v
+```
 
+### 5. Multi-Container Orchestration
 ```bash
 docker-compose up --build -d
 ```
 
 ---
 
-## Verification & Testing
+## Author and Engineering Attribution
 
-The platform includes test suites verifying authentication scopes, route authorization guards, and database migrations:
+All architecture, backend API design, database schemas, predictive machine learning pipelines, and AI integration in this repository were engineered end-to-end by Avvari Naga Harthikanand (Harthik).
 
-```bash
-pytest tests/ -v
-```
-
-GitHub Actions executes automated linting with **Ruff** and comprehensive test passes on every push.
-
----
-
-## Engineering Attribution
-
-All architecture, backend API design, database schemas, and AI integration in this repository were engineered by **Avvari Naga Harthikanand (Harthik)**.
-
-- **Developer:** Avvari Naga Harthikanand
-- **LinkedIn:** https://www.linkedin.com/in/harthik
-- **GitHub:** https://github.com/harctik
-- **Email:** harthikanand90@gmail.com
-- **License:** MIT License
+Developer: Avvari Naga Harthikanand
+Location: Bangalore, Karnataka, India
+LinkedIn: https://www.linkedin.com/in/harthik
+GitHub: https://github.com/harctik
+Email: harthikanand90@gmail.com
+License: MIT License
