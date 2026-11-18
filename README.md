@@ -1,18 +1,31 @@
-# 🎓 STUDVISOR v3.0
-### Next-Gen AI-Powered College ERP & Student Engagement Platform
+<div align="center">
 
-**Studvisor** is an industrial-grade enterprise resource planning (ERP) system designed for modern educational institutions. It goes beyond simple management by integrating **Predictive Analytics**, **AI Tutoring**, and **Social Engagement** into a unified three-tier RBAC architecture.
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Claude API](https://img.shields.io/badge/Claude_3-Anthropic-D97706?style=for-the-badge&logo=anthropic&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
+
+# 🎓 STUDVISOR v3.0
+
+**Next-Generation AI-Powered College ERP & Predictive Student Engagement Platform**
+
+[Architecture](#-advanced-backend-architecture) • [Features](#-core-capabilities) • [Project Structure](#-project-structure) • [Deployment](#-deployment) • [CI/CD](#-cicd)
+
+</div>
 
 ---
 
-## 🚀 Advanced Backend Architecture
+## 🏛️ Advanced Backend Architecture
 
 The backend is built with **FastAPI** and **PostgreSQL**, utilizing a modular service-oriented architecture designed for multi-tenancy and high security.
 
 ### 🛡️ Security & Integrity Layer
 - **Three-Layer RBAC**: JWT Claim verification → Route-level Guards → Database Scoping.
 - **Audit Middleware**: Every state-changing request is logged with actor metadata, IP, and resource IDs.
-- **Attendance Hardening**: 24-hour amendment window with a HOD-governed approval workflow for historical corrections.
+- **Attendance Hardening**: 24-hour amendment window with an HOD-governed approval workflow for historical corrections.
 - **Rotating HMAC Anonymity**: Daily-rotating salts for anonymous campus wall posts to prevent deanonymization.
 
 ### 🧠 AI Engine (Anthropic Claude-3 / Ollama)
@@ -30,72 +43,87 @@ The backend is built with **FastAPI** and **PostgreSQL**, utilizing a modular se
 
 ---
 
-## 📂 Project Structure
+## 📁 Project Structure
 
 ```text
-backend/
-├── api/
-│   ├── routes/          # RBAC-guarded endpoint controllers
-│   │   ├── admin.py     # Institutional management & analytics
-│   │   ├── faculty.py   # Grading, attendance, & class health
-│   │   ├── student.py   # Profiles, mood check-ins, recovery
-│   │   ├── ai_engine.py # LLM orchestration & streaming
-│   │   └── reports.py   # High-fidelity HTML/PDF generators
-├── core/
-│   ├── security.py      # JWT, RBAC logic, & scope helpers
-│   ├── middleware.py    # Audit logging & CORS
-│   └── ai_context.py    # RAG system for LLM context
-├── services/            # Business logic & AI algorithms
-│   ├── predictive.py    # Risk scoring algorithms
-│   ├── merit.py         # Gamification engine
-│   └── timetable.py     # Conflict resolution engine
-└── app/
-    ├── models.py        # 45+ SQLAlchemy models
-    └── schemas.py       # Pydantic validation layer
+Studvisor/
+├── backend/
+│   ├── api/
+│   │   ├── routes/          # RBAC-guarded endpoint controllers
+│   │   │   ├── admin.py     # Institutional management & analytics
+│   │   │   ├── faculty.py   # Grading, attendance, & class health
+│   │   │   ├── student.py   # Profiles, mood check-ins, recovery
+│   │   │   ├── ai_engine.py # LLM orchestration & streaming
+│   │   │   └── reports.py   # High-fidelity HTML/PDF generators
+│   │   └── deps.py          # Dependency injection & auth
+│   ├── core/
+│   │   ├── security.py      # JWT, RBAC logic, & scope helpers
+│   │   ├── middleware.py    # Audit logging & CORS
+│   │   └── ai_context.py    # RAG system for LLM context
+│   ├── services/            # Business logic & AI algorithms
+│   │   ├── predictive.py    # Risk scoring algorithms
+│   │   ├── merit.py         # Gamification engine
+│   │   └── timetable.py     # Conflict resolution engine
+│   └── app/
+│       ├── models.py        # 45+ SQLAlchemy models
+│       └── schemas.py       # Pydantic validation layer
+├── frontend/                # Modern React / Vite / Tailwind UI
+├── tests/                   # Automated unit & integration tests
+├── alembic/                 # Database migrations
+├── docker-compose.yml       # Containerized multi-service deployment
+└── Dockerfile
 ```
 
 ---
 
-## 🛠️ Deployment
+## ⚡ Deployment
 
 ### Prerequisites
-- Python 3.9+
+- Python 3.10+
 - PostgreSQL
 - Anthropic API Key (optional, falls back to Mock AI)
 
 ### Quick Start
-1. **Clone & Setup**:
-   ```bash
-   pip install -r requirements.txt
-   cp .env.example .env
-   ```
-2. **Initialize Database**:
-   ```bash
-   python -m backend.seed_all
-   ```
-3. **Run Server**:
-   ```bash
-   uvicorn backend.main:app --reload
-   ```
 
-### Docker
+```bash
+# 1. Clone & Setup
+git clone https://github.com/harctik/Studvisor.git
+cd Studvisor
+python -m venv venv
+# On Windows:
+venv\Scripts\activate
+# On Linux/macOS:
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Configure Environment
+cp .env.example .env
+
+# 3. Initialize Database
+python -m backend.seed_all
+
+# 4. Run Development Server
+uvicorn backend.main:app --reload
+```
+
+### Docker Compose
+
 ```bash
 docker-compose up --build
 ```
 
 ---
 
-## 📊 High-Fidelity Reports
-Studvisor generates premium, CSS-styled academic documents:
-- **Digital Marksheets**: Professional layouts with Inter/Outfit typography.
-- **Attendance Certificates**: Verified attendance summaries for scholarship/visa.
-- **Fee Receipts**: Glassmorphism-styled transactional documents.
+## 🧪 Testing & CI
+
+```bash
+pytest tests/ -v
+```
+
+All pushes and pull requests trigger automated linting with **Ruff** and tests across PostgreSQL and SQLite via GitHub Actions.
 
 ---
 
-## 📜 Audit Log
-All sensitive operations are tracked in the `audit_logs` table, viewable via the Admin Analytics dashboard.
+## 📄 License
 
----
-*Created by Antigravity AI for Studvisor Institute.*
-
+This project is licensed under the MIT License.
