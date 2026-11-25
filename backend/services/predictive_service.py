@@ -1,6 +1,6 @@
 """
-Predictive Academic Intervention Engine — nightly risk scoring.
-Three-axis risk model: Dropout, Academic Failure, Disengagement.
+Academic Intervention Engine — rule-based risk scoring.
+Two risk scores: Dropout and Academic Failure.
 """
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -17,7 +17,7 @@ class PredictiveService:
 
     def compute_dropout_risk(self, db: Session, student_id: int) -> dict:
         """
-        Dropout Risk = weighted(attendance_slope, missed_deadlines, fee_arrears, login_gap)
+        Dropout Risk = weighted(attendance_slope, submission_rate, fee_arrears, overall_attendance)
         Score 0.0 (safe) → 1.0 (critical)
         """
         student = db.query(Student).filter(Student.id == student_id).first()
@@ -174,7 +174,7 @@ class PredictiveService:
         }
 
     def batch_risk_assessment(self, db: Session) -> list:
-        """Run risk assessment for ALL students. Nightly batch job."""
+        """Run risk assessment for all students; returns those with combined score >= 0.3."""
         students = db.query(Student).all()
         results = []
         for s in students:

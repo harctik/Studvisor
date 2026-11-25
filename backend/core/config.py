@@ -2,6 +2,7 @@
 Studvisor v2.0 — Centralized configuration using pydantic-settings.
 Single source of truth for all environment variables.
 """
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
@@ -20,7 +21,7 @@ class Settings(BaseSettings):
     DB_ECHO: bool = False
 
     # ── Auth ─────────────────────────────────────────────────────────────
-    SECRET_KEY: str = "change-this-in-production-immediately"
+    SECRET_KEY: str = Field(default="", validate_default=True)  # required, no default
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -61,6 +62,14 @@ class Settings(BaseSettings):
     # ── Deployment ───────────────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
     ALLOWED_HOSTS: str = "*"
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def require_private_secret_key(cls, value: str) -> str:
+        # The old placeholder is public, so tokens signed with it can be forged.
+        if not value.strip() or value == "change-this-in-production-immediately":
+            raise ValueError("Set SECRET_KEY to a private random value (environment variable or .env file)")
+        return value
 
     class Config:
         env_file = ".env"

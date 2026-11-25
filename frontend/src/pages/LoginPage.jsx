@@ -6,8 +6,8 @@ import { getToken } from '../utils/auth'
 import { loginUser } from '../services/api'
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('demo')
-  const [password, setPassword] = useState('demo')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

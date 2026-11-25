@@ -1,6 +1,6 @@
-# Studvisor: Enterprise Academic ERP & Predictive Student Analytics
+# Studvisor: Enterprise Academic ERP & Student Risk Analytics
 
-A production-grade college enterprise resource planning platform combining high-throughput FastAPI services, three-tier role-based access control, and predictive machine learning models for early dropout risk scoring and contextual academic tutoring.
+A college enterprise resource planning platform combining a FastAPI backend, role-based access control, rule-based dropout-risk scoring and an academic chat assistant.
 
 ![Studvisor Banner](banner.png)
 
@@ -8,40 +8,40 @@ A production-grade college enterprise resource planning platform combining high-
 
 ## Technical Overview
 
-Higher education administrative systems typically suffer from fragmented databases, poor security audit trails, and reactive rather than predictive student support. Studvisor addresses these institutional bottlenecks by unifying administrative lifecycle management with predictive machine learning algorithms.
+Higher education administrative systems typically suffer from fragmented databases, poor security audit trails, and reactive rather than proactive student support. Studvisor addresses these institutional bottlenecks by unifying administrative lifecycle management with rule-based early-warning risk scoring.
 
 The platform executes three critical institutional functions:
-1. Predictive Academic Intervention: Nightly pipelines evaluate attendance decay, grade volatility, and engagement indicators to compute probabilistic dropout risk scores before mid-term examinations.
-2. Context-Aware Large Language Model Tutoring: Interfaces Anthropic Claude-3 through streaming Server-Sent Events with curated institutional syllabus documents and personal performance metrics.
-3. Hardened Administrative Workflows: Enforces strict time-bound attendance modifications with multi-signature head-of-department approval chains and tamper-evident audit logs.
+1. Early Academic Intervention: Rule-based scoring (`backend/services/predictive_service.py`) combines attendance trend, assignment submission rate, unpaid fees and overall attendance into a weighted dropout-risk score from 0 to 1, and lists the signals each student triggers.
+2. Academic Chat Assistant: The web app's chat uses a built-in rule-based chatbot and streams its reply word by word over Server-Sent Events. Separate `/v2/ai` API endpoints add the user's database records to the prompt for Anthropic's Claude (model ID `claude-3-sonnet-20240229` in the code). Without `ANTHROPIC_API_KEY`, the non-streaming call tries a local Ollama model and then returns a mock reply; the streaming call returns a mock reply.
+3. Attendance Amendments: The amend endpoint has a time limit and requires a reason. For older records, faculty can submit a request that a head of department (HOD) approves or rejects.
 
 ---
 
-## Predictive Analytics & Model Performance
+## Risk Scoring & Offline Model Comparison
 
-The predictive intelligence layer identifies academic disengagement before it results in course failure or withdrawal. The evaluation pipeline benchmarks multiple classification algorithms against historical student performance data.
+The risk scoring service is designed to flag students who may need support. The charts below come from a separate offline classifier comparison. This repository includes the chart images, but not a script or data file that produces them.
 
 ### 1. Classifier Benchmarking & ROC Evaluation
 
-Model selection benchmarks Gradient Boosting, Random Forest, Logistic Regression, and Support Vector Machines across standardized evaluation folds. Gradient Boosting achieved superior discrimination across imbalanced cohort records.
+An offline comparison of Random Forest, Gradient Boosting, HistGradient Boosting and Logistic Regression is shown below. Logistic Regression had the highest test AUC (0.958); the two gradient-boosting variants had the highest test accuracy (0.917 and 0.920). The production scoring service is rule-based; these classifiers are an offline benchmark.
 
 ![Model Comparison](docs/plots/model_comparison.png)
 
-The Receiver Operating Characteristic curves illustrate true positive versus false positive rates across decision thresholds. The primary model maintains an Area Under the Curve exceeding 0.91.
+The Receiver Operating Characteristic curves illustrate true positive versus false positive rates across decision thresholds. All four classifiers reach a test AUC above 0.93.
 
 ![ROC Curves](docs/plots/roc_curves.png)
 
 ### 2. Feature Attribution & Risk Stratification
 
-Feature importance analysis isolates the primary signals driving academic vulnerability. Attendance trajectory, mid-term assessment performance, and lab practical completion rates constitute over sixty percent of the composite risk weighting.
+The feature chart shows absolute Logistic Regression coefficients from the offline comparison. The largest are attendance percentage, CGPA, backlogs, stress level and average internal marks. These are not the weights used by the rule-based scoring service.
 
 ![Feature Importance](docs/plots/feature_importance.png)
 
-The risk distribution profile stratifies student cohorts into actionable intervention tiers, allowing department advisors to prioritize counseling resources effectively.
+The risk distribution chart shows risk categories and engagement risk scores for the offline dataset, with a threshold of 55. These are separate from the risk levels returned by the scoring service.
 
 ![Risk Distribution](docs/plots/risk_distribution.png)
 
-The confusion matrix confirms high recall on at-risk classifications, minimizing false negatives where failing students might otherwise go undetected.
+In the Logistic Regression confusion matrix, the classifier identified 62 of 75 at-risk cases (83% recall) and missed 13. Of the 87 cases it flagged, 62 were at risk (71% precision).
 
 ![Confusion Matrix](docs/plots/confusion_matrix.png)
 
@@ -50,7 +50,7 @@ The confusion matrix confirms high recall on at-risk classifications, minimizing
 ## System Architecture
 
 ```text
-[ Frontend: React 18 + Vite + TailwindCSS ]
+[ Frontend: React 19 + Vite ]
                      |
                      | (RESTful JSON / SSE Streaming / JWT Bearer)
                      v
@@ -60,41 +60,41 @@ The confusion matrix confirms high recall on at-risk classifications, minimizing
       |                             |
 [ Security Gateway ]       [ Business Domain Services ]
       |                             |
-      +---> JWT Verification        +---> Predictive Risk Engine (Dropout / Failure)
-      +---> Three-Tier RBAC         +---> Timetable Constraint Solver (No Overlaps)
-      +---> Audit Logger Middleware +---> Gamified Merit & Engagement Tracker
-      |                             +---> Report Generator (PDF / HTML Marksheets)
+      +---> JWT Verification        +---> Risk Scoring Engine (Dropout / Failure)
+      +---> Role-Based Access       +---> Timetable Generator & Conflict Detector
+      +---> Audit Logger Middleware +---> Merit Points & Leaderboard
+      |                             +---> HTML Marksheets & CSV Export
       v                             |
-[ PostgreSQL Persistence ]          v
-(SQLAlchemy 2.0 + Alembic)  [ Anthropic Claude-3 Integration ]
-                            (Context-Aware Academic RAG)
+[ SQLite default / PostgreSQL ]     v
+(PostgreSQL in Compose)     [ Anthropic / Ollama Adapter ]
+                            (Database context in prompts)
 ```
 
 ---
 
 ## Security & Access Control
 
-Studvisor implements defense-in-depth across the API and persistence layers:
+What the current code does:
 
-1. Cryptographic Authentication: Stateless JSON Web Tokens with HS256 signatures, short lifespans, and automated refresh rotation.
-2. Endpoint Authorization Guards: Strict FastAPI dependency injection verifying user roles across Admin, Faculty, and Student tiers.
-3. Attendance Audit Lockout: Strict twenty-four hour edit window on lecture registers. Retrospective modifications require formal digital sign-off from designated academic supervisors.
-4. Tamper-Evident Audit Logging: Middleware records actor identity, timestamp, originating IP address, HTTP method, and affected database records for all state-modifying requests.
-5. Forum Identity Protection: Daily rotating HMAC salts shield student identities on internal academic grievance forums.
+1. Authentication: JSON Web Tokens signed with HS256. By default, access tokens last 120 minutes and refresh tokens 7 days. `/refresh` issues a new access token; refresh tokens are not rotated.
+2. Role Checks: FastAPI dependencies and a route-prefix middleware check the role in the token. Roles are student, faculty, HOD, admin and parent.
+3. Attendance Amendments: The amend endpoint closes 24 hours after 17:00 on the class date (compared in UTC). Later changes can go through a single HOD approval. The attendance marking endpoint can also overwrite existing records and has no time limit.
+4. Audit Logging: Middleware writes a server log line with the method, path, response status, actor and IP address for POST, PUT, PATCH and DELETE requests, except some chat routes. Saving these entries to the database does not currently work.
+5. Campus Wall: Anonymous posts are stored with a truncated HMAC-SHA256 of the student ID, using a salt that changes daily, instead of the ID itself. The server log described above still records who sent each request.
 
 ---
 
 ## Data Model Specifications
 
-The persistence layer defines forty-five relational schemas mapped through SQLAlchemy 2.0 and versioned with Alembic migrations:
+The persistence layer defines 44 SQLAlchemy models. Alembic is set up, but the repository contains no migration files. Selected models:
 
-| Entity Category | Primary Schemas | Operational Responsibility |
+| Entity Category | Selected Models | Operational Responsibility |
 |---|---|---|
-| Identity & Access | Users, Roles, Permissions, Sessions | Credentials, token validation, and administrative delegation |
-| Academic Registry | Departments, Courses, Semesters, Sections | Institutional structural hierarchy and syllabus mapping |
-| Performance | AttendanceLogs, InternalMarks, ExamResults | Time-series lecture attendance and continuous evaluations |
-| Predictive Risk | RiskPredictions, FeatureSnapshots, Alerts | Batch inference outputs, feature importance records, early warnings |
-| Intelligent Tutoring | Conversations, SyllabiEmbeddings, Queries | Vector retrieval context, Claude-3 prompt history, RAG documents |
+| People | Student, Faculty, Admin, Parent | Records for each type of user |
+| Academic Structure | Subject, SyllabusTopic, CourseEnrollment, TimetableSlot, AcademicCalendar | Subjects, syllabus topics, enrollment and scheduling |
+| Performance | Attendance, Mark, GPARecord, ExamSchedule, Assignment, AssignmentSubmission | Attendance, marks, GPA, exams and coursework |
+| Risk Scoring | AIRiskScore | Schema for stored risk scores and signals; defined, but not yet used by the scoring service |
+| AI Chat | ChatHistory | Chat queries, responses, page context and session IDs |
 
 ---
 
@@ -103,30 +103,37 @@ The persistence layer defines forty-five relational schemas mapped through SQLAl
 ```text
 Studvisor/
 ├── backend/
+│   ├── main.py                # FastAPI app, middleware and CORS setup
 │   ├── api/
-│   │   ├── routes/
-│   │   │   ├── admin.py     # Institutional analytics and user administration
-│   │   │   ├── faculty.py   # Grade records, attendance rosters, and class metrics
-│   │   │   ├── student.py   # Profiles, engagement checks, and study plans
-│   │   │   ├── ai_engine.py # Claude-3 orchestration and streaming endpoints
-│   │   │   └── reports.py   # Academic report and marksheet generation
-│   │   └── deps.py          # Auth dependencies and database session injection
+│   │   └── routes/
+│   │       ├── admin.py          # Dashboard, users, leave and reports
+│   │       ├── faculty_portal.py # Attendance, marks, leave and assignments
+│   │       ├── student.py        # Profile and mood check-in
+│   │       ├── ai_engine.py      # AI chat and related AI endpoints
+│   │       ├── reports.py        # HTML marksheets, certificates and fee receipts
+│   │       └── ...               # Other route modules
 │   ├── core/
-│   │   ├── security.py      # Token signing, password hashing, and role scopes
-│   │   ├── middleware.py    # Request audit logging and CORS configuration
-│   │   └── ai_context.py    # RAG document retrieval for LLM context
+│   │   ├── config.py          # Environment settings
+│   │   ├── security.py        # Password hashing, tokens and role checks
+│   │   └── ai_context.py      # Role-specific database context for AI prompts
+│   ├── middleware/
+│   │   ├── audit_log.py       # Logging of write requests
+│   │   └── role_guard.py      # Role checks by route prefix
 │   ├── services/
-│   │   ├── predictive.py    # At-risk scoring algorithms
-│   │   ├── merit.py         # Gamified progression system
-│   │   └── timetable.py     # Automated scheduling constraint solver
+│   │   ├── predictive_service.py  # Rule-based risk scoring
+│   │   ├── merit_service.py       # Merit points, tiers and leaderboard
+│   │   ├── timetable_service.py   # Timetable conflict detection
+│   │   └── ...                    # Other services
 │   └── app/
-│       ├── models.py        # SQLAlchemy relational schemas
-│       └── schemas.py       # Pydantic data validation models
-├── frontend/                # React, Vite, and TailwindCSS interface
-├── docs/plots/              # Model training curves and evaluation charts
-├── tests/                   # Automated pytest unit and integration suites
-├── alembic/                 # Database schema migration versions
-├── docker-compose.yml       # Production multi-container specification
+│       ├── database.py        # Database engine and sessions
+│       ├── middleware.py      # Request logging and security headers
+│       ├── models.py          # SQLAlchemy models
+│       └── schemas.py         # Pydantic data validation models
+├── frontend/                # React and Vite interface
+├── docs/plots/              # Offline model evaluation charts
+├── tests/                   # Pytest API tests
+├── alembic/                 # Alembic setup (no migration files yet)
+├── docker-compose.yml       # Multi-container setup
 └── Dockerfile               # Container build definition
 ```
 
@@ -149,8 +156,16 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configuration & Database Initialization
+
+`SECRET_KEY` is required. It signs login tokens, so use a private random value and keep it out of Git. Generate one with the command below, then add it as `SECRET_KEY=your-value` to a `.env` file in the repository root. The app and Docker Compose both read it from there.
+
 ```bash
-cp .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+The default database is a local SQLite file. To change other settings, set environment variables such as `DATABASE_URL`, `ANTHROPIC_API_KEY`, `OLLAMA_URL` and `OLLAMA_MODEL` in your shell. The repository has no `.env.example` file.
+
+```bash
 python -m backend.seed_all
 ```
 
@@ -173,7 +188,7 @@ docker-compose up --build -d
 
 ## Author and Engineering Attribution
 
-All architecture, backend API design, database schemas, predictive machine learning pipelines, and AI integration in this repository were engineered end-to-end by Avvari Naga Harthikanand (Harthik).
+All architecture, backend API design, database schemas, risk scoring, and AI integration in this repository were engineered end-to-end by Avvari Naga Harthikanand (Harthik).
 
 Developer: Avvari Naga Harthikanand
 Location: Bangalore, Karnataka, India

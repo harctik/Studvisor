@@ -23,7 +23,7 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://studvisor:studvisor_pass@db:5432/studvisor
-      SECRET_KEY: change-this-in-production-immediately
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in your shell or a .env file}
       CORS_ORIGINS: http://localhost:5173,http://localhost:3000
     depends_on:
       db:

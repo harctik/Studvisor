@@ -22,16 +22,6 @@ class RegisterRequest(BaseModel):
 
 @router.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    # Demo logic
-    if data.username.lower() == "demo" and data.password.lower() == "demo":
-        role = data.role or "student"
-        # Force a generic ID for demo
-        entity_id = 9999
-        name = "Demo " + role.capitalize()
-        token = create_access_token({"sub": "demo", "role": role, "entity_id": entity_id})
-        refresh = create_refresh_token({"sub": "demo", "role": role, "entity_id": entity_id})
-        return {"access_token": token, "refresh_token": refresh, "role": role, "user": {"id": entity_id, "name": name, "department": "Demo Dept"}}
-
     # Try student
     user = db.query(Student).filter(Student.username == data.username).first()
     if user and verify_password(data.password, user.hashed_password):
