@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Studvisor"
     APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
+    DEMO_LOGIN: bool = False  # test-only admin/admin sign-in, this computer only
 
     # ── Database ─────────────────────────────────────────────────────────
     DATABASE_URL: str = "sqlite:///./studvisor.db"

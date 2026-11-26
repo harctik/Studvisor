@@ -1,5 +1,5 @@
 # ──────────────────────────────────────────────────────────────────────────────
-# Nexus ERP — Frontend Dockerfile
+# Studvisor — Frontend Dockerfile
 # Multi-stage: Node 20 builder → Nginx static server
 # ──────────────────────────────────────────────────────────────────────────────
 

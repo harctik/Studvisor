@@ -1,0 +1,19 @@
+// Geometry fitted to the supplied artwork; coordinates are artwork pixels x2.
+const SHAPE =
+  'M2178.2 133.0C2241.7 133.0 2293.2 184.4 2293.2 247.8C2293.2 311.2 2241.7 362.6 2178.2 362.6L1272.1 362.6C1128.0 362.6 1009.4 476.8 1009.4 625.1C1009.4 763.0 1124.0 876.2 1250.1 876.2L1510.1 876.2C1565.7 876.2 1610.7 921.1 1610.7 976.4C1610.7 1031.7 1565.7 1076.6 1510.1 1076.6L939.2 1076.6C675.0 1076.6 458.2 875.3 458.2 622.6C458.2 348.4 704.9 133.0 983.1 133.0ZM578.1 1475.9C512.0 1475.9 458.4 1421.3 458.4 1354.1C458.4 1286.8 512.0 1232.3 578.1 1232.3L1557.5 1232.3C1679.1 1232.3 1800.6 1122.7 1800.6 976.1C1800.6 835.9 1678.6 728.8 1582.4 728.8L1311.9 728.8C1251.8 728.8 1203.1 682.0 1203.1 624.4C1203.1 566.7 1251.8 520.0 1311.9 520.0L1807.2 520.0C2070.6 520.0 2293.7 723.9 2293.7 991.1C2293.7 1286.6 2007.1 1475.9 1779.2 1475.9Z'
+
+/** Studvisor's mark. A round-capped S from two interlocking pieces, in the current text colour. */
+export default function Mark({ size = 28, title }) {
+  return (
+    <svg
+      width={size}
+      height={Math.round(size * 0.7316)}
+      viewBox="458.2 133 1835.4 1342.8"
+      role={title ? 'img' : undefined}
+      aria-label={title}
+      aria-hidden={title ? undefined : true}
+    >
+      <path fill="currentColor" fillRule="evenodd" d={SHAPE} />
+    </svg>
+  )
+}
