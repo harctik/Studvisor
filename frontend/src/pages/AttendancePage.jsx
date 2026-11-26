@@ -1,69 +1,146 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import ErpLayout from '../components/ErpLayout'
-import { Info, Download, Printer } from 'lucide-react'
+import { Badge, Empty, Field, Load, Meter, Panel, Stats, Table, Tabs } from '../components/kit'
+import { TARGET, standing } from '../lib/attendance'
+import { formatDate } from '../lib/format'
+import useApi from '../lib/useApi'
+import {
+  errorMessage, fetchHeatmap, fetchMissedClasses, fetchOverallAttendance, fetchSubjectAttendance,
+  simulateBunk,
+} from '../services/api'
 
-export default function AttendancePage() {
-  const [data, setData] = useState([
-    { sl: 1, name: "CA-V2 Vocation Course II : Electronic Content Design ( 6BCA-ECD )", th: 18, ah: 9, dl: 6, ahdl: 15, ah_pct: "50.00 %", ahdl_pct: "83.33 %" },
-    { sl: 2, name: "Internship ( 6BCA-INT )", th: 10, ah: 6, dl: 2, ahdl: 8, ah_pct: "60.00 %", ahdl_pct: "80.00 %" },
-    { sl: 3, name: "Industrial Specialization ( 6BCA-IS )", th: 21, ah: 6, dl: 2, ahdl: 8, ah_pct: "28.57 %", ahdl_pct: "38.10 %" },
-    { sl: 4, name: "LIBRARY ( 6BCA-LIB )", th: 1, ah: 1, dl: 0, ahdl: 1, ah_pct: "100.00 %", ahdl_pct: "100.00 %" },
-    { sl: 5, name: "Mobile Application Development ( 6BCA-MAD )", th: 32, ah: 17, dl: 9, ahdl: 26, ah_pct: "53.13 %", ahdl_pct: "81.25 %" },
-    { sl: 6, name: "Mobile Application Development Lab ( 6BCA-MADLAB )", th: 27, ah: 16, dl: 6, ahdl: 22, ah_pct: "59.26 %", ahdl_pct: "81.48 %" },
-    { sl: 7, name: "Machine Learning ( 6BCA-ML )", th: 38, ah: 20, dl: 9, ahdl: 29, ah_pct: "52.63 %", ahdl_pct: "76.32 %" }
-  ])
+const HEAT_LABEL = { full: 'Present all day', partial: 'Missed some classes', absent: 'Absent all day' }
+
+function Planner({ subjects }) {
+  const [subjectId, setSubjectId] = useState(subjects[0]?.subject_id ?? '')
+  const [count, setCount] = useState(2)
+  const [result, setResult] = useState(null)
+  const [problem, setProblem] = useState(null)
+
+  async function check(event) {
+    event.preventDefault()
+    setProblem(null)
+    try {
+      setResult(await simulateBunk(Number(count), Number(subjectId)))
+    } catch (error) {
+      setResult(null)
+      setProblem(errorMessage(error))
+    }
+  }
+
+  const edit = (setter) => (event) => {
+    setter(event.target.value)
+    setResult(null)
+  }
 
   return (
-    <ErpLayout>
-      <div className="breadcrumb">ATTENDANCE</div>
-
-      <div style={{ background: '#f5f5f5', padding: '12px 16px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#555', marginBottom: '24px' }}>
-        <Info size={16} color="#333" />
-        <strong>Note:</strong> When the rule "Attendance count from date of admission" is enabled, data is shown from the date of admission.
+    <form className="form" onSubmit={check}>
+      <div className="form-grid">
+        <Field label="Subject">
+          <select value={subjectId} onChange={edit(setSubjectId)}>
+            {subjects.map((s) => <option key={s.subject_id} value={s.subject_id}>{s.subject}</option>)}
+          </select>
+        </Field>
+        <Field label="Classes you would miss">
+          <input type="number" min="1" max="30" value={count} onChange={edit(setCount)} required />
+        </Field>
       </div>
+      <div className="form-actions"><button type="submit" className="btn btn-primary">Check</button></div>
+      {problem && <p className="notice notice-bad" role="alert">{problem}</p>}
+      {result && (
+        <p className={`notice ${result.simulated_pct >= TARGET ? 'notice-good' : 'notice-bad'}`} role="status">
+          Your attendance would go from {result.current_pct}% to {result.simulated_pct}% ({result.simulated_present} of {result.simulated_total} classes).
+        </p>
+      )}
+    </form>
+  )
+}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginBottom: '16px' }}>
-        <button className="filter-btn"><Download size={14}/> Export</button>
-        <button className="filter-btn"><Printer size={14}/> Print</button>
-      </div>
+export default function AttendancePage() {
+  const [view, setView] = useState('subjects')
+  const overall = useApi(fetchOverallAttendance)
+  const subjects = useApi(fetchSubjectAttendance)
+  const missed = useApi(fetchMissedClasses)
+  const heatmap = useApi(fetchHeatmap)
 
-      <div className="linways-table-container">
-        <table className="linways-table">
-          <thead>
-            <tr className="linways-table-header-row">
-              <th colSpan="8">COURSE WISE REPORT</th>
-            </tr>
-            <tr className="linways-table-header-row" style={{ backgroundColor: '#fff', borderBottom: '1px solid #e0e0e0' }}>
-              <th colSpan="8" style={{ fontWeight: 400, textTransform: 'none' }}>Date range : 09-02-2026 to 11-07-2026</th>
-            </tr>
-            <tr>
-              <th>SL.NO.</th>
-              <th style={{ textAlign: 'left' }}>COURSE NAME</th>
-              <th>TH</th>
-              <th>AH</th>
-              <th>DL</th>
-              <th>AH + DL</th>
-              <th>AH%</th>
-              <th>AH+DL%</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map(row => (
-              <tr key={row.sl}>
-                <td>{row.sl}</td>
-                <td style={{ textAlign: 'left', color: '#333' }}>{row.name}</td>
-                <td>{row.th}</td>
-                <td>{row.ah}</td>
-                <td>{row.dl}</td>
-                <td>{row.ahdl}</td>
-                <td>{row.ah_pct}</td>
-                <td>{row.ahdl_pct}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  return (
+    <ErpLayout title="Attendance" subtitle={`You need ${TARGET}% in each subject.`}>
+      <Load state={overall}>
+        {({ total, present, absent, percentage }) => (
+          <>
+            <Stats items={[
+              { label: 'Attendance', value: total ? `${percentage}%` : '—', tone: total ? (percentage >= TARGET ? 'good' : 'bad') : undefined },
+              { label: 'Classes held', value: total },
+              { label: 'Attended', value: present },
+              { label: 'Missed', value: absent },
+            ]} />
+            {total > 0 && <p className="meta">{standing(present, total)}</p>}
+          </>
+        )}
+      </Load>
 
+      <Tabs label="Attendance view" value={view} onChange={setView} tabs={[['subjects', 'By subject'], ['days', 'By day'], ['missed', 'Missed classes']]} />
+
+      {view === 'subjects' && (
+        <Load state={subjects}>
+          {({ subjects: list }) => (
+            <>
+              <Panel flush title="Subjects, lowest first">
+                <Table
+                  rows={list}
+                  rowKey={(s) => s.subject_id}
+                  empty={<Empty title="No attendance recorded yet" />}
+                  columns={[
+                    { label: 'Subject', cell: (s) => <>{s.subject}<span className="cell-sub">{s.code}</span></> },
+                    { label: 'Progress', cell: (s) => <div style={{ minWidth: 130 }}><Meter percent={s.percentage} target={TARGET} /></div> },
+                    { label: 'Attended', numeric: true, cell: (s) => `${s.present} / ${s.total}` },
+                    { label: 'Percent', numeric: true, cell: (s) => <Badge tone={s.below_75 ? 'bad' : 'good'}>{s.percentage}%</Badge> },
+                  ]}
+                />
+              </Panel>
+              {list.length > 0 && <Panel title="What if I miss a few classes?"><Planner subjects={list} /></Panel>}
+            </>
+          )}
+        </Load>
+      )}
+
+      {view === 'days' && (
+        <Panel title="Each recorded day">
+          <Load state={heatmap}>
+            {({ heatmap: days }) => (days.length ? (
+              <>
+                <div className="heat">
+                  {days.map((d) => {
+                    const text = `${formatDate(d.date)}: ${d.present} of ${d.total} classes`
+                    return <span key={d.date} className={d.status} title={text} role="img" aria-label={text} />
+                  })}
+                </div>
+                <div className="legend">
+                  {Object.entries(HEAT_LABEL).map(([key, text]) => <span key={key}><i className={`key ${key}`} />{text}</span>)}
+                </div>
+              </>
+            ) : <Empty title="No days recorded yet" />)}
+          </Load>
+        </Panel>
+      )}
+
+      {view === 'missed' && (
+        <Panel flush title="Recently missed (up to 50)">
+          <Load state={missed}>
+            {({ missed: list }) => (
+              <Table
+                rows={list}
+                empty={<Empty title="You haven't missed any classes" />}
+                columns={[
+                  { label: 'Date', cell: (m) => formatDate(m.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) },
+                  { label: 'Hour', numeric: true, cell: (m) => m.hour },
+                  { label: 'Subject', cell: (m) => m.subject },
+                ]}
+              />
+            )}
+          </Load>
+        </Panel>
+      )}
     </ErpLayout>
   )
 }

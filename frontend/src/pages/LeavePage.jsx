@@ -1,167 +1,91 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import ErpLayout from '../components/ErpLayout'
-import { applyLeaveRequest, fetchLeaveRequests, fetchMissedClasses } from '../services/api'
+import { Badge, Empty, Field, Load, Panel, Stats, Table, useAction } from '../components/kit'
+import { formatDate, toISODate } from '../lib/format'
+import useApi from '../lib/useApi'
+import { applyLeaveRequest, fetchLeaveBalance, fetchLeaveRequests, withdrawLeaveRequest } from '../services/api'
 
-const initialForm = {
-  leave_type: 'OD',
-  from_date: '2026-04-21',
-  to_date: '2026-04-21',
-  reason: '',
-}
+const TYPES = ['Medical', 'Personal', 'OD', 'Other']
+const TONE = { Approved: 'good', Rejected: 'bad', Pending: 'warn' }
+const blank = () => ({ leave_type: 'Medical', from_date: toISODate(), to_date: toISODate(), reason: '' })
 
 export default function LeavePage() {
-  const [leaveRequests, setLeaveRequests] = useState([])
-  const [missedClasses, setMissedClasses] = useState([])
-  const [form, setForm] = useState(initialForm)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
+  const requests = useApi(fetchLeaveRequests)
+  const balance = useApi(fetchLeaveBalance)
+  const { busy, run, banner } = useAction(() => Promise.all([requests.reload(), balance.reload()]))
+  const [form, setForm] = useState(blank)
+  const [problem, setProblem] = useState(null)
 
-  async function loadLeaveData() {
-    const [leaveData, missedData] = await Promise.all([
-      fetchLeaveRequests(),
-      fetchMissedClasses(),
-    ])
-    setLeaveRequests(leaveData)
-    setMissedClasses(missedData)
-  }
+  const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }))
 
-  useEffect(() => {
-    async function load() {
-      try {
-        await loadLeaveData()
-      } catch (err) {
-        setError(err?.response?.data?.detail || 'Failed to load leave data.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    load()
-  }, [])
-
-  async function handleSubmit(event) {
+  async function submit(event) {
     event.preventDefault()
-    setSubmitting(true)
-    setMessage('')
-    setError('')
-    try {
-      await applyLeaveRequest(form)
-      setMessage('Leave request submitted as pending.')
-      setForm(initialForm)
-      await loadLeaveData()
-    } catch (err) {
-      setError(err?.response?.data?.detail || 'Failed to submit leave request.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  function updateForm(field, value) {
-    setForm((current) => ({ ...current, [field]: value }))
+    // The server accepts any dates, so the order is checked here.
+    if (form.to_date < form.from_date) return setProblem('The end date is before the start date.')
+    if (!form.reason.trim()) return setProblem('Add a reason for the request.')
+    setProblem(null)
+    const sent = await run('apply', () => applyLeaveRequest({ ...form, reason: form.reason.trim() }), 'Request sent.')
+    if (sent) setForm(blank())
+    return undefined
   }
 
   return (
-    <ErpLayout title="OD / Leave" subtitle="Review missed classes and submit OD, medical, or leave requests.">
-      {error ? <div className="error-box page-error">{error}</div> : null}
-      {message ? <div className="success-box page-error">{message}</div> : null}
-      {loading ? <div className="card empty-state">Loading leave data...</div> : null}
+    <ErpLayout title="Leave and OD" subtitle="Apply for leave or on-duty and follow each request.">
+      <Load state={balance}>
+        {({ balance: types }) => (
+          <Stats items={Object.entries(types).map(([type, b]) => ({
+            label: `${type} requests left`, value: b.remaining, note: `${b.used} of ${b.limit} used`,
+          }))} />
+        )}
+      </Load>
 
-      {!loading ? (
-        <section className="leave-grid">
-          <div className="card">
-            <h3 className="section-title">Apply Leave</h3>
-            <form className="erp-form" onSubmit={handleSubmit}>
-              <label>
-                Type
-                <select value={form.leave_type} onChange={(event) => updateForm('leave_type', event.target.value)}>
-                  <option value="OD">OD</option>
-                  <option value="Medical">Medical</option>
-                  <option value="Leave">Leave</option>
-                </select>
-              </label>
-              <label>
-                From
-                <input type="date" value={form.from_date} onChange={(event) => updateForm('from_date', event.target.value)} />
-              </label>
-              <label>
-                To
-                <input type="date" value={form.to_date} onChange={(event) => updateForm('to_date', event.target.value)} />
-              </label>
-              <label>
-                Reason
-                <textarea value={form.reason} onChange={(event) => updateForm('reason', event.target.value)} rows={4} />
-              </label>
-              <button className="primary-btn" type="submit" disabled={submitting}>
-                {submitting ? 'Submitting...' : 'Submit Request'}
-              </button>
-            </form>
+      {banner}
+
+      <Panel title="New request">
+        <form className="form" onSubmit={submit}>
+          <div className="form-grid">
+            <Field label="Type">
+              <select value={form.leave_type} onChange={set('leave_type')}>
+                {TYPES.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="From"><input type="date" value={form.from_date} onChange={set('from_date')} required /></Field>
+            <Field label="To"><input type="date" value={form.to_date} min={form.from_date} onChange={set('to_date')} required /></Field>
           </div>
-
-          <div className="page-stack">
-            <div className="card">
-              <h3 className="section-title">Applied Requests</h3>
-              {leaveRequests.length ? (
-                <div className="table-wrapper">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Dates</th>
-                        <th>Status</th>
-                        <th>Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leaveRequests.map((item) => (
-                        <tr key={item.id}>
-                          <td>{item.leave_type}</td>
-                          <td>{item.from_date === item.to_date ? item.from_date : `${item.from_date} to ${item.to_date}`}</td>
-                          <td>{item.status}</td>
-                          <td>{item.reason || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="empty-state">No leave requests found.</div>
-              )}
-            </div>
-
-            <div className="card">
-              <h3 className="section-title">Missed Classes for Leave Support</h3>
-              {missedClasses.length ? (
-                <div className="table-wrapper">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Absent Periods</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {missedClasses.map((day) => (
-                        <tr key={day.date}>
-                          <td>{day.date}</td>
-                          <td>
-                            {day.missed_hours
-                              .map((item) => `${item.hour} hr - ${item.subject_name}`)
-                              .join(', ')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="empty-state">No absences found for leave support.</div>
-              )}
-            </div>
+          <Field label="Reason"><textarea value={form.reason} onChange={set('reason')} maxLength={500} required /></Field>
+          {problem && <p className="notice notice-bad" role="alert">{problem}</p>}
+          <div className="form-actions">
+            <button type="submit" className="btn btn-primary" disabled={busy === 'apply'}>{busy === 'apply' ? 'Sending…' : 'Send request'}</button>
           </div>
-        </section>
-      ) : null}
+        </form>
+      </Panel>
+
+      <Panel flush title="Your requests">
+        <Load state={requests}>
+          {({ leaves }) => (
+            <Table
+              rows={leaves}
+              rowKey={(l) => l.id}
+              empty={<Empty title="You haven't made any requests" />}
+              columns={[
+                { label: 'Type', cell: (l) => l.type },
+                { label: 'Dates', cell: (l) => (l.from === l.to ? formatDate(l.from) : `${formatDate(l.from)} to ${formatDate(l.to)}`) },
+                { label: 'Reason', cell: (l) => l.reason },
+                { label: 'Status', cell: (l) => <Badge tone={TONE[l.status]}>{l.status}</Badge> },
+                {
+                  label: 'Action',
+                  cell: (l) => l.status === 'Pending' && (
+                    <button type="button" className="btn btn-small" disabled={busy === l.id}
+                      onClick={() => window.confirm('Withdraw this request?') && run(l.id, () => withdrawLeaveRequest(l.id), 'Request withdrawn.')}>
+                      Withdraw
+                    </button>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </Load>
+      </Panel>
     </ErpLayout>
   )
 }

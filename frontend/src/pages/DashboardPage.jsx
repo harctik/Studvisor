@@ -1,49 +1,135 @@
-import { Filter } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import ErpLayout from '../components/ErpLayout'
+import { Badge, Empty, Load, Meter, Panel } from '../components/kit'
+import { TARGET, standing } from '../lib/attendance'
+import { formatDate, money, toISODate, daysUntil } from '../lib/format'
+import useApi from '../lib/useApi'
+import {
+  fetchAnnouncements, fetchAssignments, fetchBunkAlerts, fetchCGPA, fetchExams, fetchFeeSummary,
+  fetchOverallAttendance, fetchTimetable,
+} from '../services/api'
+
+function SideLink({ to, label, state, value }) {
+  return (
+    <Link to={to}>
+      <span>{label}</span>
+      <strong>{state.data ? value(state.data) : '—'}</strong>
+    </Link>
+  )
+}
 
 export default function DashboardPage() {
-  const courses = [
-    { code: "6BCA-ML", title: "MACHINE LEARNING", subtitle: "6BCA-ML - Machine Learning", faculty: "ROSHINI B" },
-    { code: "6BCA-PW", title: "PROJECT WORK", subtitle: "6BCA-PW - Project Work", faculty: "Dr.KAVIPRIYA K" },
-    { code: "6BCA-INT", title: "INTERNSHIP", subtitle: "6BCA-INT - Internship", faculty: "SANTHYA S NAIR" },
-    { code: "6BCA-MAD", title: "MOBILE APPLICATION D...", subtitle: "6BCA-MAD - Mobile Application Development", faculty: "Dr. M.A.JOSEPHINE SATHYA" },
-    { code: "6BCA-MLLAB", title: "MACHINE LEARNING ...", subtitle: "6BCA-MLLAB - Machine Learning Lab", faculty: "ROSHINI B" },
-    { code: "6BCA-PLA", title: "PLACEMENT TRAINING", subtitle: "6BCA-PLA - Placement Training", faculty: "Dr.JUDE ASHMI E" },
-    { code: "6BCA-ECD", title: "CA-V2 VOCATION COURS...", subtitle: "6BCA-ECD - CA-V2 Vocation Course II : Electronic Content ...", faculty: "Dr Sudha V" },
-    { code: "6BCA-ST", title: "CA-E2 ELECTIVE II : B. SOF...", subtitle: "6BCA-ST - CA-E2 Elective II : b. Software Testing", faculty: "Dr.UMARANI C" },
-    { code: "6BCA-MADLAB", title: "MOBILE APPLICATI...", subtitle: "6BCA-MADLAB - Mobile Application Development Lab", faculty: "Dr. M.A.JOSEPHINE SATHYA" },
-    { code: "6BCA-LIB", title: "LIBRARY", subtitle: "6BCA-LIB - Library", faculty: "SHYLAJA C" },
-    { code: "6BCA-SPORTS", title: "SPORTS", subtitle: "6BCA-SPORTS - SPORTS", faculty: "Dr.DEVARAJ N D" },
-    { code: "6BCA-IS", title: "INDUSTRIAL SPECIALIZATI...", subtitle: "6BCA-IS - Industrial Specialization", faculty: "Sanjay" },
-  ]
+  const attendance = useApi(fetchOverallAttendance)
+  const alerts = useApi(fetchBunkAlerts)
+  const timetable = useApi(fetchTimetable)
+  const cgpa = useApi(fetchCGPA)
+  const fees = useApi(fetchFeeSummary)
+  const assignments = useApi(fetchAssignments)
+  const exams = useApi(fetchExams)
+  const announcements = useApi(fetchAnnouncements)
+
+  const now = new Date()
+  const weekday = now.toLocaleDateString('en-US', { weekday: 'long' })
 
   return (
-    <ErpLayout>
-      <div className="breadcrumb">HOME</div>
-      
-      <div className="tabs-container">
-        <div className="tab active">My Courses</div>
-        <div className="tab">Dashboard / Overview</div>
-      </div>
+    <ErpLayout title="Dashboard" subtitle={formatDate(toISODate(now), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}>
+      <Load state={attendance}>
+        {({ present, total, percentage }) => (
+          <section className="hero">
+            <div>
+              <p className="hero-label">Overall attendance</p>
+              <p className="hero-figure">{total ? `${percentage}%` : '—'}</p>
+              {total > 0 && <Meter percent={percentage} target={TARGET} />}
+              <p className="hero-note">
+                {total > 0 && `${present} of ${total} classes. `}
+                {standing(present, total)}
+              </p>
+            </div>
+            <div className="hero-side">
+              <SideLink to="/gpa" label="CGPA" state={cgpa} value={(d) => (d.semesters.length ? d.cgpa : '—')} />
+              <SideLink to="/assignments" label="Assignments to submit" state={assignments} value={(d) => d.assignments.filter((a) => !a.submitted).length} />
+              <SideLink to="/fees" label="Fees pending" state={fees} value={(d) => money(d.pending)} />
+            </div>
+          </section>
+        )}
+      </Load>
 
-      <div className="program-info">
-        Program: <strong>BCA - IS</strong>, Batch: <strong>BCA (IS) - 2023-26</strong>, Current Semester: <strong>S6</strong>
-      </div>
+      <div className="split">
+        <Panel title={`${weekday}'s classes`} action={<Link to="/timetable">Full timetable</Link>}>
+          <Load state={timetable}>
+            {({ timetable: slots }) => {
+              const today = slots.filter((s) => s.day === weekday).sort((a, b) => a.hour - b.hour)
+              if (!today.length) return <Empty title="No classes today" />
+              return (
+                <ul className="list">
+                  {today.map((slot) => (
+                    <li key={slot.hour}>
+                      <div className="list-main">
+                        <strong>{slot.subject}</strong>
+                        <span>{[slot.faculty, slot.room].filter(Boolean).join(' · ')}</span>
+                      </div>
+                      <Badge>Hour {slot.hour}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )
+            }}
+          </Load>
+        </Panel>
 
-      <div className="filter-row">
-        <button className="filter-btn">
-          <Filter size={14} /> Show Filters
-        </button>
-      </div>
+        <Panel title="Subjects to watch" action={<Link to="/attendance">All subjects</Link>}>
+          <Load state={alerts}>
+            {({ alerts: list }) => (list.length ? (
+              <ul className="list">
+                {list.map((alert) => (
+                  <li key={alert.subject}>
+                    <div className="list-main"><strong>{alert.subject}</strong></div>
+                    <Badge tone={alert.level === 'critical' ? 'bad' : 'warn'}>{alert.percentage}%</Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : <Empty title="No attendance warnings" />)}
+          </Load>
+        </Panel>
 
-      <div className="course-grid">
-        {courses.map(course => (
-          <div className="course-card" key={course.code}>
-            <div className="course-title">{course.code} - {course.title}</div>
-            <div className="course-subtitle">{course.subtitle}</div>
-            <div className="faculty-badge">{course.faculty}</div>
-          </div>
-        ))}
+        <Panel title="Coming exams" action={<Link to="/exams">All exams</Link>}>
+          <Load state={exams}>
+            {({ exams: list }) => {
+              const coming = list.filter((e) => daysUntil(e.date) >= 0).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4)
+              if (!coming.length) return <Empty title="No exams scheduled" />
+              return (
+                <ul className="list">
+                  {coming.map((exam) => (
+                    <li key={exam.id}>
+                      <div className="list-main">
+                        <strong>{exam.subject}</strong>
+                        <span>{[exam.type, exam.time, exam.venue].filter(Boolean).join(' · ')}</span>
+                      </div>
+                      <Badge>{formatDate(exam.date, { day: 'numeric', month: 'short' })}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )
+            }}
+          </Load>
+        </Panel>
+
+        <Panel title="Announcements" action={<Link to="/announcements">All announcements</Link>}>
+          <Load state={announcements}>
+            {({ announcements: list }) => (list.length ? (
+              <ul className="list">
+                {[...list].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4).map((item) => (
+                  <li key={item.id}>
+                    <div className="list-main">
+                      <strong>{item.title}</strong>
+                      <span>{formatDate(item.date)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : <Empty title="No announcements" />)}
+          </Load>
+        </Panel>
       </div>
     </ErpLayout>
   )

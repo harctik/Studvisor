@@ -169,6 +169,12 @@ The default database is a local SQLite file. To change other settings, set envir
 python -m backend.seed_all
 ```
 
+#### Test sign-in (local only)
+
+For testing on your own computer, add `DEMO_LOGIN=true` to `.env` and seed the database. You can then sign in with the username `admin` and the password `admin`. It opens the demo student's account, because the web screens are for students only.
+
+It is off by default. It only accepts requests from the same computer that carry no proxy headers, and it stays off on common hosting services. Leave it unset anywhere other people can reach.
+
 ### 3. Launching the Backend Service
 ```bash
 uvicorn backend.main:app --reload --port 8000

@@ -1,68 +1,85 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import ErpLayout from '../components/ErpLayout'
-import InfoCard from '../components/InfoCard'
-import { fetchCalendarMonth, fetchUpcomingHolidays } from '../services/api'
+import { Empty, Load, Panel } from '../components/kit'
+import { formatDate, parseDate, toISODate } from '../lib/format'
+import useApi from '../lib/useApi'
+import { fetchCalendar } from '../services/api'
 
-export default function CalendarPage() {
-  const [calendarDays, setCalendarDays] = useState([])
-  const [holidays, setHolidays] = useState([])
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-  useEffect(() => {
-    async function loadCalendar() {
-      try {
-        const [monthData, holidayData] = await Promise.all([
-          fetchCalendarMonth(2026, 4),
-          fetchUpcomingHolidays(),
-        ])
-        setCalendarDays(monthData)
-        setHolidays(holidayData)
-      } catch (err) {
-        setError(err?.response?.data?.detail || 'Failed to load calendar.')
-      } finally {
-        setLoading(false)
-      }
-    }
+function Month({ days }) {
+  const today = toISODate()
+  const [cursor, setCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 
-    loadCalendar()
-  }, [])
-
-  const workingDays = calendarDays.filter((day) => day.is_working_day).length
-  const totalHours = calendarDays.reduce((sum, day) => sum + Number(day.working_hours || 0), 0)
+  const byDate = new Map(days.map((d) => [d.date, d]))
+  const year = cursor.getFullYear()
+  const month = cursor.getMonth()
+  const blanks = (new Date(year, month, 1).getDay() + 6) % 7
+  const length = new Date(year, month + 1, 0).getDate()
+  const dates = Array.from({ length }, (_, i) => toISODate(new Date(year, month, i + 1)))
+  const noted = dates.map((d) => byDate.get(d)).filter((d) => d && (d.holiday || d.note))
+  const move = (step) => setCursor(new Date(year, month + step, 1))
 
   return (
-    <ErpLayout title="Academic Calendar" subtitle="Check holidays, working days, and working hours.">
-      {error ? <div className="error-box page-error">{error}</div> : null}
-      {loading ? <div className="card empty-state">Loading calendar...</div> : null}
-
-      {!loading ? (
-        <>
-          <section className="dashboard-grid calendar-summary-grid">
-            <InfoCard title="Working Days" value={workingDays} subtitle="April 2026" />
-            <InfoCard title="Holidays" value={calendarDays.length - workingDays} subtitle="Non-working days" />
-            <InfoCard title="Working Hours" value={totalHours} subtitle="Total scheduled hours" />
-            <InfoCard title="Next Holiday" value={holidays[0]?.holiday_name || '-'} subtitle={holidays[0]?.date || 'No upcoming holiday'} />
-          </section>
-
-          <section className="page-stack">
-            <div className="card">
-              <h3 className="section-title">April 2026 Calendar</h3>
-              <div className="calendar-grid">
-                {calendarDays.map((day) => (
-                  <div className={`calendar-day ${day.is_working_day ? 'working' : 'holiday'}`} key={day.date}>
-                    <div className="calendar-date">{day.date.slice(-2)}</div>
-                    <div className="calendar-weekday">{day.day_name}</div>
-                    <div className="calendar-status">
-                      {day.is_working_day ? `${day.working_hours} hours` : day.holiday_name || 'Holiday'}
-                    </div>
-                  </div>
-                ))}
+    <>
+      <Panel
+        flush
+        title="Month view"
+        action={(
+          <div className="cal-nav">
+            <button type="button" className="icon-btn" onClick={() => move(-1)} aria-label="Previous month"><ChevronLeft size={18} /></button>
+            <h2 aria-live="polite">{cursor.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</h2>
+            <button type="button" className="icon-btn" onClick={() => move(1)} aria-label="Next month"><ChevronRight size={18} /></button>
+          </div>
+        )}
+      >
+        <div className="month">
+          {DOW.map((d) => <div key={d} className="dow">{d}</div>)}
+          {Array.from({ length: blanks }, (_, i) => <div key={`blank-${i}`} />)}
+          {dates.map((date, i) => {
+            const info = byDate.get(date)
+            return (
+              <div key={date} className={`day ${info && !info.working ? 'day-off' : ''} ${date === today ? 'day-today' : ''}`}>
+                <b>{i + 1}</b>
+                {info?.holiday && <small className="holiday">{typeof info.holiday === 'string' ? info.holiday : 'Holiday'}</small>}
+                {info?.note && <small>{info.note}</small>}
               </div>
-            </div>
-          </section>
-        </>
-      ) : null}
+            )
+          })}
+        </div>
+      </Panel>
+
+      <p className="meta">
+        Shaded days are non-working. {dates.filter((d) => byDate.get(d)?.working).length} working days this month.
+        {!dates.some((d) => byDate.has(d)) && ' No calendar has been published for this month.'}
+      </p>
+
+      <Panel title="Holidays and notes this month">
+        {noted.length ? (
+          <ul className="list">
+            {noted.map((d) => (
+              <li key={d.date}>
+                <div className="list-main">
+                  <strong>{typeof d.holiday === 'string' ? d.holiday : d.note || 'Holiday'}</strong>
+                  <span>{formatDate(d.date, { weekday: 'long', day: 'numeric', month: 'long' })}{typeof d.holiday === 'string' && d.note ? ` · ${d.note}` : ''}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : <Empty title="Nothing marked for this month" />}
+      </Panel>
+    </>
+  )
+}
+
+export default function CalendarPage() {
+  const state = useApi(fetchCalendar)
+  return (
+    <ErpLayout title="Calendar" subtitle="Working days and holidays for the academic year.">
+      <Load state={state}>
+        {({ calendar }) => <Month days={calendar.filter((d) => parseDate(d.date))} />}
+      </Load>
     </ErpLayout>
   )
 }

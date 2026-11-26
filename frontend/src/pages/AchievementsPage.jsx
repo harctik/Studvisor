@@ -1,46 +1,45 @@
-import { useState, useEffect } from 'react';
-import { fetchAchievements } from '../services/api';
-import ErpLayout from '../components/ErpLayout';
-import { Award, Star, Zap, BookOpen } from 'lucide-react';
+import ErpLayout from '../components/ErpLayout'
+import { Badge, Empty, Load, Panel, Stats, Table } from '../components/kit'
+import { formatDate } from '../lib/format'
+import useApi from '../lib/useApi'
+import { fetchAchievements, fetchMerit } from '../services/api'
 
 export default function AchievementsPage() {
-  const [achievements, setAchievements] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => { loadAchievements(); }, []);
-
-  const loadAchievements = async () => {
-    try { const data = await fetchAchievements(); setAchievements(data?.achievements || []); }
-    catch (err) { console.error("Failed to load achievements", err); }
-    finally { setLoading(false); }
-  };
+  const badges = useApi(fetchAchievements)
+  const merit = useApi(fetchMerit)
 
   return (
-    <ErpLayout title="ACHIEVEMENTS">
-      {loading ? <div className="card"><p>Loading achievements...</p></div> : achievements.length === 0 ? (
-        <div className="card"><p>No recent achievements to display.</p></div>
-      ) : (
-        <div className="course-grid">
-          {achievements.map((item) => (
-            <div key={item.id} className="course-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <div style={{ padding: '16px', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', gap: '12px', margin: '-24px -24px 16px -24px' }}>
-                <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {item.category === 'sports' ? <Zap size={20} /> : item.category === 'academic' ? <BookOpen size={20} /> : <Star size={20} />}
-                </div>
-                <div>
-                  <div className="course-title" style={{ margin: 0 }}>{item.title}</div>
-                  <div className="course-subtitle" style={{ margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.75rem' }}>{item.category}</div>
-                </div>
-              </div>
-              <p style={{ color: '#555', fontSize: '0.9rem', lineHeight: '1.5', flexGrow: 1 }}>{item.description}</p>
-              <div style={{ padding: '12px', backgroundColor: '#f0f7ff', borderRadius: '4px', borderLeft: '4px solid var(--primary)', marginTop: '8px' }}>
-                <p style={{ margin: 0, fontWeight: 600, color: '#333' }}>{item.winner_name}</p>
-                <p style={{ margin: '4px 0 0', color: '#888', fontSize: '0.8rem' }}>Awarded on {item.date}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+    <ErpLayout title="Achievements" subtitle="Badges and merit points you have earned.">
+      <Load state={merit}>
+        {(m) => <Stats items={[{ label: 'Merit points', value: m.points }, { label: 'Tier', value: m.tier || '—' }]} />}
+      </Load>
+      <Load state={badges}>
+        {({ achievements }) => (achievements.length ? (
+          <div className="cards">
+            {achievements.map((a) => (
+              <article key={`${a.badge}-${a.earned}`} className="card">
+                <div className="card-top"><h2>{a.badge}</h2><Badge tone="lime">{a.xp} XP</Badge></div>
+                <p className="meta">Earned {formatDate(a.earned)}</p>
+              </article>
+            ))}
+          </div>
+        ) : <Panel><Empty title="No badges yet" /></Panel>)}
+      </Load>
+      <Panel flush title="Points history">
+        <Load state={merit}>
+          {({ history }) => (
+            <Table
+              rows={history}
+              empty={<Empty title="No points awarded yet" />}
+              columns={[
+                { label: 'Date', cell: (h) => formatDate(h.date) },
+                { label: 'Reason', cell: (h) => h.reason },
+                { label: 'Points', numeric: true, cell: (h) => (h.points > 0 ? `+${h.points}` : h.points) },
+              ]}
+            />
+          )}
+        </Load>
+      </Panel>
     </ErpLayout>
-  );
+  )
 }

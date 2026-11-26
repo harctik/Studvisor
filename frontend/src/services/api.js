@@ -1,11 +1,13 @@
 import axios from "axios";
-import { getToken } from "../utils/auth";
+import { getToken, removeToken } from "../utils/auth";
+import useAuthStore from "../stores/authStore";
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 20000,
 });
 
 api.interceptors.request.use((config) => {
@@ -16,103 +18,113 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ── AUTH ─────────────────────────────────────────────────────────────────────
-
-export async function loginUser(credentials) {
-  const response = await api.post("/login", credentials);
-  return response.data;
+function endSession() {
+  removeToken();
+  useAuthStore.getState().logout();
+  window.location.assign("/login");
 }
 
-// ── PROFILE ─────────────────────────────────────────────────────────────────
+api.interceptors.response.use(undefined, (error) => {
+  if (error.response?.status === 401 && !error.config?.url?.endsWith("/login")) {
+    endSession();
+  }
+  return Promise.reject(error);
+});
 
-export async function fetchProfile() {
-  const response = await api.get("/student/me");
-  return response.data;
+/** Turn a failed request into a sentence a student can act on. */
+export function errorMessage(error) {
+  const response = error?.response;
+  if (!response) {
+    return `Can't reach the Studvisor server at ${API_BASE_URL}.`;
+  }
+  if (response.status >= 500) {
+    return "The server hit an error. Please try again.";
+  }
+  const text = response.data?.message || response.data?.detail;
+  return typeof text === "string" ? text : `Request failed (${response.status}).`;
 }
 
-// ── ATTENDANCE ──────────────────────────────────────────────────────────────
+const get = (url, params) => api.get(url, { params }).then((r) => r.data);
+const post = (url, body, params) => api.post(url, body, { params }).then((r) => r.data);
 
-export async function fetchOverallAttendance() {
-  const response = await api.get("/attendance/overall");
-  return response.data;
-}
+// Collection routes on the backend end in a slash.
 
-export async function fetchSubjectAttendance() {
-  const response = await api.get("/attendance/subject-wise");
-  return response.data;
-}
+// Account
+export const loginUser = (credentials) => post("/login", credentials);
+export const fetchProfile = () => get("/student/me");
 
-export async function fetchMissedClasses(params = {}) {
-  const response = await api.get("/attendance/missed-classes", { params });
-  return response.data;
-}
+// Attendance
+export const fetchOverallAttendance = () => get("/attendance/overall");
+export const fetchSubjectAttendance = () => get("/attendance/subject-wise");
+export const fetchMissedClasses = () => get("/attendance/missed-classes");
+export const fetchBunkAlerts = () => get("/attendance/bunk-alerts");
+export const fetchHeatmap = () => get("/attendance/heatmap");
+export const simulateBunk = (missCount = 1, subjectId = null) =>
+  get("/attendance/simulate-bunk", {
+    miss_count: missCount,
+    ...(subjectId ? { subject_id: subjectId } : {}),
+  });
 
-export async function fetchBunkAlerts() {
-  const response = await api.get("/attendance/bunk-alerts");
-  return response.data;
-}
+// Academics
+export const fetchMarks = () => get("/marks/");
+export const fetchCGPA = () => get("/gpa/cgpa");
+export const predictCgpa = (targetPct) => get("/analytics/predict-cgpa", { target_pct: targetPct });
+export const fetchTimetable = () => get("/timetable/");
+export const fetchCalendar = () => get("/calendar/");
+export const fetchAssignments = () => get("/assignments/");
+export const submitAssignment = (id) => post(`/assignments/${id}/submit`);
+export const fetchExams = () => get("/exams/");
+export const fetchSyllabus = () => get("/syllabus/");
+export const fetchNotes = () => get("/notes/");
+export const rateNote = (id, helpful) => post(`/notes/${id}/rate`, null, { helpful });
 
-export async function simulateBunk(missCount = 1, subjectCode = null) {
-  const params = { miss_count: missCount };
-  if (subjectCode) params.subject_code = subjectCode;
-  const response = await api.get("/attendance/simulate-bunk", { params });
-  return response.data;
-}
+// Leave
+export const fetchLeaveRequests = () => get("/leave/requests");
+export const fetchLeaveBalance = () => get("/leave/balance");
+export const applyLeaveRequest = (data) => post("/leave/requests", data);
+export const withdrawLeaveRequest = (id) => api.delete(`/leave/requests/${id}`).then((r) => r.data);
 
-export async function fetchHeatmap(year = 2026, month = 4) {
-  const response = await api.get("/attendance/heatmap", { params: { year, month } });
-  return response.data;
-}
+// Fees
+export const fetchMyFees = () => get("/fees/my-fees");
+export const fetchFeeSummary = () => get("/fees/summary");
+export const fetchPaymentHistory = () => get("/fees/payments");
 
-// ── MARKS ───────────────────────────────────────────────────────────────────
+// Library and placement
+export const searchLibrary = (q) => get("/library/catalog", q ? { q } : {});
+export const fetchMyBooks = () => get("/library/my-books");
+export const issueBook = (id) => post(`/library/issue/${id}`);
+export const returnBook = (issueId) => post(`/library/return/${issueId}`);
+export const fetchDrives = () => get("/placement/drives");
+export const fetchApplications = () => get("/placement/my-applications");
+export const applyToDrive = (id) => post(`/placement/apply/${id}`);
 
-export async function fetchMarks() {
-  const response = await api.get("/marks");
-  return response.data;
-}
+// Campus
+export const fetchAnnouncements = () => get("/announcements/");
+export const fetchNotifications = () => get("/notifications/");
+export const fetchEvents = () => get("/events/");
+export const rsvpEvent = (id) => post(`/events/${id}/rsvp`);
+export const fetchPolls = () => get("/polls/");
+export const votePoll = (pollId, optionId) => post(`/polls/${pollId}/vote`, null, { option_id: optionId });
+export const fetchFaculty = () => get("/faculty/directory");
+export const fetchLostFound = () => get("/lost-found/");
+export const createLostFoundItem = (data) => post("/lost-found/", data);
+export const fetchAnonPosts = () => get("/anon/posts");
+export const createAnonPost = (category, content) => post("/anon/posts", { category, content });
+export const fetchComplaints = () => get("/complaints/");
+export const createComplaint = (data) => post("/complaints/", data);
+export const fetchMerit = () => get("/merit/my");
+export const fetchAchievements = () => get("/achievements/my");
+export const fetchLeaderboard = () => get("/leaderboard/");
 
-// ── CALENDAR ────────────────────────────────────────────────────────────────
+// Assistant
+export const fetchChatHistory = () => get("/chat/history");
+export const clearChatHistory = () => api.delete("/chat/history").then((r) => r.data);
+export const fetchChatSuggestions = () => get("/chat/suggestions");
+export const sendChatMessage = (query, contextPage = "dashboard") =>
+  post("/chat/", { query, context_page: contextPage });
 
-export async function fetchCalendarMonth(year = 2026, month = 4) {
-  const response = await api.get("/calendar/month", { params: { year, month } });
-  return response.data;
-}
-
-export async function fetchUpcomingHolidays() {
-  const response = await api.get("/calendar/upcoming-holidays");
-  return response.data;
-}
-
-// ── LEAVE ───────────────────────────────────────────────────────────────────
-
-export async function fetchLeaveRequests() {
-  const response = await api.get("/leave/requests");
-  return response.data;
-}
-
-export async function applyLeaveRequest(data) {
-  const response = await api.post("/leave/requests", data);
-  return response.data;
-}
-
-// ── CHAT ────────────────────────────────────────────────────────────────────
-
-export async function fetchChatHistory() {
-  const response = await api.get("/chat-history");
-  return response.data;
-}
-
-export async function clearChatHistory() {
-  const response = await api.delete("/chat-history");
-  return response.data;
-}
-
-export async function sendChatMessage(message, contextPage = "dashboard") {
-  const response = await api.post("/chat", { message, context_page: contextPage });
-  return response.data;
-}
-
-export async function streamChatMessage(message, handlers = {}) {
+/** POST /chat/stream answers with `data: {"token": "...", "done": false}` events. */
+export async function streamChatMessage(query, { contextPage = "dashboard", onText } = {}) {
   const token = getToken();
   const response = await fetch(`${API_BASE_URL}/chat/stream`, {
     method: "POST",
@@ -120,311 +132,35 @@ export async function streamChatMessage(message, handlers = {}) {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ message, context_page: handlers.contextPage || "dashboard" }),
+    body: JSON.stringify({ query, context_page: contextPage }),
   });
 
+  if (response.status === 401) endSession();
   if (!response.ok || !response.body) {
-    throw new Error("Unable to stream chatbot response.");
+    throw new Error("The assistant didn't answer.");
   }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let finalText = "";
+  let text = "";
 
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split("\n\n");
+    const events = buffer.split(/\r?\n\r?\n/);
     buffer = events.pop() || "";
 
-    for (const rawEvent of events) {
-      const event = parseSseEvent(rawEvent);
-      if (!event) continue;
-
-      if (event.type === "meta") {
-        handlers.onMeta?.(event.data);
-      }
-
-      if (event.type === "chunk") {
-        finalText += event.data;
-        handlers.onChunk?.(event.data, finalText);
-      }
-
-      if (event.type === "done") {
-        handlers.onDone?.(finalText);
-      }
+    for (const event of events) {
+      if (!event.startsWith("data:")) continue;
+      text += JSON.parse(event.slice(5)).token ?? "";
+      onText?.(text);
     }
   }
 
-  return { reply: finalText };
-}
-
-function parseSseEvent(rawEvent) {
-  const lines = rawEvent.split("\n");
-  const eventLine = lines.find((line) => line.startsWith("event:"));
-  const dataLine = lines.find((line) => line.startsWith("data:"));
-  if (!eventLine || !dataLine) return null;
-
-  const type = eventLine.replace("event:", "").trim();
-  const rawData = dataLine.replace("data:", "").trim();
-
-  try {
-    return { type, data: JSON.parse(rawData) };
-  } catch {
-    return { type, data: rawData };
-  }
-}
-
-// ── NOTIFICATIONS ───────────────────────────────────────────────────────────
-
-export async function fetchNotifications() {
-  const response = await api.get("/notifications");
-  return response.data;
-}
-
-// ── MERIT ───────────────────────────────────────────────────────────────────
-
-export async function fetchMeritStatus() {
-  const response = await api.get("/merit/status");
-  return response.data;
-}
-
-// ── TIMETABLE ───────────────────────────────────────────────────────────────
-
-export async function fetchTimetable() {
-  const response = await api.get("/timetable");
-  return response.data;
-}
-
-export async function fetchTodaySchedule() {
-  const response = await api.get("/timetable/today");
-  return response.data;
-}
-
-// ── ANALYTICS ───────────────────────────────────────────────────────────────
-
-export async function fetchPerformanceAnalytics() {
-  const response = await api.get("/analytics/performance");
-  return response.data;
-}
-
-export async function predictCgpa(expectedMarks) {
-  const response = await api.post("/analytics/predict-cgpa", { expected_marks: expectedMarks });
-  return response.data;
-}
-
-// ── ASSIGNMENTS ─────────────────────────────────────────────────────────────
-
-export async function fetchAssignments() {
-  const response = await api.get("/assignments");
-  return response.data;
-}
-
-export async function submitAssignment(assignmentId) {
-  const response = await api.post(`/assignments/${assignmentId}/submit`);
-  return response.data;
-}
-
-// ── EXAMS ───────────────────────────────────────────────────────────────────
-
-export async function fetchExams() {
-  const response = await api.get("/exams");
-  return response.data;
-}
-
-export async function fetchUpcomingExams() {
-  const response = await api.get("/exams/upcoming");
-  return response.data;
-}
-
-// ── SYLLABUS ────────────────────────────────────────────────────────────────
-
-export async function fetchSyllabus() {
-  const response = await api.get("/syllabus");
-  return response.data;
-}
-
-export async function toggleSyllabusTopic(topicId) {
-  const response = await api.post(`/syllabus/topics/${topicId}/toggle`);
-  return response.data;
-}
-
-// ── NOTES ───────────────────────────────────────────────────────────────────
-
-export async function fetchNotes(subjectId = null) {
-  const params = subjectId ? { subject_id: subjectId } : {};
-  const response = await api.get("/notes", { params });
-  return response.data;
-}
-
-export async function createNote(data) {
-  const response = await api.post("/notes", data);
-  return response.data;
-}
-
-export async function rateNote(noteId, isHelpful) {
-  const response = await api.post(`/notes/${noteId}/rate`, null, { params: { is_helpful: isHelpful } });
-  return response.data;
-}
-
-// ── ANONYMOUS CHAT ──────────────────────────────────────────────────────────
-
-export async function fetchAnonPosts(category = null, sort = "recent") {
-  const params = { sort };
-  if (category && category !== "all") params.category = category;
-  const response = await api.get("/anon/posts", { params });
-  return response.data;
-}
-
-export async function createAnonPost(category, content) {
-  const response = await api.post("/anon/posts", { category, content });
-  return response.data;
-}
-
-export async function reactToPost(postId, reactionType) {
-  const response = await api.post(`/anon/posts/${postId}/react`, { reaction_type: reactionType });
-  return response.data;
-}
-
-export async function flagPost(postId) {
-  const response = await api.post(`/anon/posts/${postId}/flag`);
-  return response.data;
-}
-
-// ── COMPLAINTS ──────────────────────────────────────────────────────────────
-
-export async function fetchComplaints(filters = {}) {
-  const response = await api.get("/complaints", { params: filters });
-  return response.data;
-}
-
-export async function createComplaint(data) {
-  const response = await api.post("/complaints", data);
-  return response.data;
-}
-
-export async function upvoteComplaint(complaintId) {
-  const response = await api.post(`/complaints/${complaintId}/upvote`);
-  return response.data;
-}
-
-// ── POLLS ───────────────────────────────────────────────────────────────────
-
-export async function fetchPolls() {
-  const response = await api.get("/polls");
-  return response.data;
-}
-
-export async function createPoll(question, options, category = "campus") {
-  const response = await api.post("/polls", { question, options, category });
-  return response.data;
-}
-
-export async function votePoll(pollId, optionId) {
-  const response = await api.post(`/polls/${pollId}/vote`, { option_id: optionId });
-  return response.data;
-}
-
-// ── EVENTS ──────────────────────────────────────────────────────────────────
-
-export async function fetchEvents() {
-  const response = await api.get("/events");
-  return response.data;
-}
-
-export async function rsvpEvent(eventId) {
-  const response = await api.post(`/events/${eventId}/rsvp`);
-  return response.data;
-}
-
-// ── ANNOUNCEMENTS ───────────────────────────────────────────────────────────
-
-export async function fetchAnnouncements() {
-  const response = await api.get("/announcements");
-  return response.data;
-}
-
-// ── FACULTY ─────────────────────────────────────────────────────────────────
-
-export async function fetchFaculty(department = null) {
-  const params = department ? { department } : {};
-  const response = await api.get("/faculty", { params });
-  return response.data;
-}
-
-// ── LOST & FOUND ────────────────────────────────────────────────────────────
-
-export async function fetchLostFound(itemType = null) {
-  const params = {};
-  if (itemType) params.item_type = itemType;
-  const response = await api.get("/lost-found", { params });
-  return response.data;
-}
-
-export async function createLostFoundItem(data) {
-  const response = await api.post("/lost-found", data);
-  return response.data;
-}
-
-export async function claimLostFoundItem(itemId) {
-  const response = await api.post(`/lost-found/${itemId}/claim`);
-  return response.data;
-}
-
-// ── ACHIEVEMENTS ────────────────────────────────────────────────────────────
-
-export async function fetchAchievements() {
-  const response = await api.get("/achievements");
-  return response.data;
-}
-
-// ── LEADERBOARD ─────────────────────────────────────────────────────────────
-
-export async function fetchLeaderboard(category = "merit") {
-  const response = await api.get("/leaderboard", { params: { category } });
-  return response.data;
-}
-
-// ── GPA / CGPA ──────────────────────────────────────────────────────────────
-
-export async function fetchSemesterGPA(semester) {
-  const response = await api.get(`/gpa/semester/${semester}`);
-  return response.data;
-}
-
-export async function fetchCGPA() {
-  const response = await api.get("/gpa/cgpa");
-  return response.data;
-}
-
-export async function fetchTranscript() {
-  const response = await api.get("/gpa/transcript");
-  return response.data;
-}
-
-// ── FEE MANAGEMENT ──────────────────────────────────────────────────────────
-
-export async function fetchMyFees() {
-  const response = await api.get("/fees/my-fees");
-  return response.data;
-}
-
-export async function fetchFeeSummary() {
-  const response = await api.get("/fees/summary");
-  return response.data;
-}
-
-export async function makePayment(data) {
-  const response = await api.post("/fees/pay", data);
-  return response.data;
-}
-
-export async function fetchPaymentHistory() {
-  const response = await api.get("/fees/payments");
-  return response.data;
+  return text;
 }
 
 // ── ADMIN PANEL ─────────────────────────────────────────────────────────────

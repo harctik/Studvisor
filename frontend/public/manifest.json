@@ -1,21 +1,21 @@
 {
-  "name": "Nexus ERP",
-  "short_name": "Nexus",
-  "description": "Unified Campus Intelligence Platform",
+  "name": "Studvisor",
+  "short_name": "Studvisor",
+  "description": "Attendance, marks, fees and campus life for students.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0e1a",
-  "theme_color": "#6366f1",
+  "background_color": "#ffffff",
+  "theme_color": "#ccff00",
   "icons": [
     {
-      "src": "/vite.svg",
-      "sizes": "192x192",
+      "src": "/favicon.svg",
+      "sizes": "any",
       "type": "image/svg+xml"
     },
     {
-      "src": "/vite.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml"
+      "src": "/studvisor-profile.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
     }
   ]
 }

@@ -1,51 +1,39 @@
-import { useState, useEffect } from 'react';
-import { fetchLeaderboard } from '../services/api';
-import ErpLayout from '../components/ErpLayout';
-import { Trophy, Medal } from 'lucide-react';
+import ErpLayout from '../components/ErpLayout'
+import { Badge, Empty, Load, Panel, Stats } from '../components/kit'
+import useApi from '../lib/useApi'
+import { fetchLeaderboard, fetchMerit } from '../services/api'
 
 export default function LeaderboardPage() {
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => { loadLeaderboard(); }, []);
-
-  const loadLeaderboard = async () => {
-    try { const data = await fetchLeaderboard('merit'); setLeaderboard(data?.leaderboard || []); }
-    catch (err) { console.error("Failed to load leaderboard", err); }
-    finally { setLoading(false); }
-  };
+  const board = useApi(fetchLeaderboard)
+  const merit = useApi(fetchMerit)
 
   return (
-    <ErpLayout title="LEADERBOARD">
-      <div className="card">
-        <h3 className="section-title">Campus Rankings</h3>
-        {loading ? <p>Loading rankings...</p> : leaderboard.length === 0 ? <p>Leaderboard is currently empty.</p> : (
-          <div className="linways-table-container">
-            <table className="linways-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '80px' }}>RANK</th>
-                  <th style={{ textAlign: 'left' }}>STUDENT</th>
-                  <th style={{ textAlign: 'left' }}>DEPARTMENT</th>
-                  <th>SCORE</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leaderboard.map((student, index) => (
-                  <tr key={student.id} style={{ backgroundColor: index < 3 ? '#f0f7ff' : 'transparent' }}>
-                    <td style={{ fontWeight: 700, color: index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : index === 2 ? '#CD7F32' : '#333' }}>
-                      {index < 3 ? (index === 0 ? <Trophy size={18} color="#FFD700" /> : <Medal size={18} color={index === 1 ? '#C0C0C0' : '#CD7F32'} />) : `#${index + 1}`}
-                    </td>
-                    <td style={{ textAlign: 'left', fontWeight: 500 }}>{student.name}</td>
-                    <td style={{ textAlign: 'left', color: '#777' }}>{student.department} • Year {student.year}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--primary)' }}>{student.score}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+    <ErpLayout title="Leaderboard" subtitle="Students ranked by merit points.">
+      <Load state={merit}>
+        {(m) => <Stats items={[{ label: 'Your merit points', value: m.points }, { label: 'Your tier', value: m.tier || '—' }]} />}
+      </Load>
+      <Panel flush>
+        <Load state={board}>
+          {({ leaderboard }) => (leaderboard.length ? (
+            <div className="table-scroll">
+              <table>
+                <thead><tr><th>Rank</th><th>Student</th><th>Department</th><th>Tier</th><th className="num">Points</th></tr></thead>
+                <tbody>
+                  {leaderboard.map((row) => (
+                    <tr key={row.rank}>
+                      <td><span className={`rank ${row.rank <= 3 ? 'rank-top' : ''}`}>{row.rank}</span></td>
+                      <td>{row.name}</td>
+                      <td>{row.department}</td>
+                      <td><Badge>{row.tier}</Badge></td>
+                      <td className="num">{row.points}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <Empty title="No one is ranked yet" />)}
+        </Load>
+      </Panel>
     </ErpLayout>
-  );
+  )
 }

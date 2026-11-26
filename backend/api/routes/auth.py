@@ -1,11 +1,13 @@
 """Auth routes — login, register, refresh, profile."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from backend.app.database import get_db
 from backend.core.security import verify_password, create_access_token, create_refresh_token, get_current_student, get_current_user, decode_token
 from backend.app.crud import get_student_by_username, create_student
 from backend.app.models import Student, Faculty, Admin
+from backend.core.config import get_settings
+from backend.core.demo_login import DEMO_PASSWORD, DEMO_STUDENT, DEMO_USERNAME, demo_login_allowed
 
 router = APIRouter(tags=["Auth"])
 
@@ -21,10 +23,18 @@ class RegisterRequest(BaseModel):
     full_name: str
 
 @router.post("/login")
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    # Test sign-in (off by default, this computer only; see core/demo_login.py)
+    demo = (
+        data.username == DEMO_USERNAME
+        and data.password == DEMO_PASSWORD
+        and demo_login_allowed(get_settings().DEMO_LOGIN, request.client.host if request.client else None, request.headers)
+    )
+
     # Try student
-    user = db.query(Student).filter(Student.username == data.username).first()
-    if user and verify_password(data.password, user.hashed_password):
+    username = DEMO_STUDENT if demo else data.username
+    user = db.query(Student).filter(Student.username == username).first()
+    if user and (demo or verify_password(data.password, user.hashed_password)):
         token = create_access_token({"sub": user.username, "role": "student", "entity_id": user.id})
         refresh = create_refresh_token({"sub": user.username, "role": "student", "entity_id": user.id})
         return {"access_token": token, "refresh_token": refresh, "role": "student", "user": {"id": user.id, "name": user.full_name, "department": user.department}}

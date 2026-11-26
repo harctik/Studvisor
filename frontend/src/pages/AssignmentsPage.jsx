@@ -1,70 +1,58 @@
-import { useState, useEffect } from 'react';
-import { fetchAssignments, submitAssignment } from '../services/api';
-import ErpLayout from '../components/ErpLayout';
-import { CheckCircle, Clock } from 'lucide-react';
+import { useState } from 'react'
+import ErpLayout from '../components/ErpLayout'
+import { Badge, Empty, Load, Tabs, useAction } from '../components/kit'
+import { daysUntil, formatDate, plural } from '../lib/format'
+import useApi from '../lib/useApi'
+import { fetchAssignments, submitAssignment } from '../services/api'
+
+function due(assignment) {
+  if (assignment.submitted) return <Badge tone="good">Submitted</Badge>
+  const days = daysUntil(assignment.due_date)
+  if (days === null) return <Badge>No due date</Badge>
+  if (days < 0) return <Badge tone="bad">Overdue by {plural(-days, 'day')}</Badge>
+  if (days === 0) return <Badge tone="warn">Due today</Badge>
+  return <Badge tone={days <= 3 ? 'warn' : 'plain'}>Due in {plural(days, 'day')}</Badge>
+}
 
 export default function AssignmentsPage() {
-  const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const state = useApi(fetchAssignments)
+  const { busy, run, banner } = useAction(state.reload)
+  const [view, setView] = useState('open')
 
-  useEffect(() => { loadAssignments(); }, []);
-
-  const loadAssignments = async () => {
-    try { const data = await fetchAssignments(); setAssignments(data?.assignments || []); }
-    catch (err) { console.error("Failed to load assignments", err); }
-    finally { setLoading(false); }
-  };
-
-  const handleSubmit = async (assignmentId) => {
-    try { await submitAssignment(assignmentId); await loadAssignments(); }
-    catch (err) { alert("Failed to submit assignment."); }
-  };
+  // This records the submission only; the server has no file upload.
+  function markSubmitted(assignment) {
+    const sure = window.confirm(`Mark "${assignment.title}" as submitted? No file is uploaded from here, and this can't be undone.`)
+    if (sure) run(assignment.id, () => submitAssignment(assignment.id), 'Marked as submitted.')
+  }
 
   return (
-    <ErpLayout title="ASSESSMENTS">
-      {loading ? <div className="card"><p>Loading assignments...</p></div> : assignments.length === 0 ? (
-        <div className="card"><p>You have no assignments right now. Enjoy your free time!</p></div>
-      ) : (
-        <div className="linways-table-container">
-          <table className="linways-table">
-            <thead>
-              <tr className="linways-table-header-row"><th colSpan="5">MY ASSIGNMENTS</th></tr>
-              <tr>
-                <th style={{ textAlign: 'left' }}>TITLE</th>
-                <th>SUBJECT</th>
-                <th>DUE DATE</th>
-                <th>STATUS</th>
-                <th>ACTION</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assignments.map((assignment) => {
-                const isSubmitted = assignment.status === "Submitted";
-                const isOverdue = new Date(assignment.due_date) < new Date() && !isSubmitted;
-                return (
-                  <tr key={assignment.id}>
-                    <td style={{ textAlign: 'left', fontWeight: 500, textDecoration: isSubmitted ? 'line-through' : 'none', color: isSubmitted ? '#888' : '#333' }}>{assignment.title}</td>
-                    <td>{assignment.subject}</td>
-                    <td style={{ color: isOverdue ? '#ef4444' : '#333' }}><Clock size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />{new Date(assignment.due_date).toLocaleDateString()}</td>
-                    <td>
-                      <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: isSubmitted ? '#dcfce7' : isOverdue ? '#fee2e2' : '#fef9c3', color: isSubmitted ? '#22c55e' : isOverdue ? '#ef4444' : '#ca8a04' }}>
-                        {isSubmitted ? 'Submitted' : isOverdue ? 'Overdue' : 'Pending'}
-                      </span>
-                    </td>
-                    <td>
-                      {!isSubmitted ? (
-                        <button className="filter-btn" onClick={() => handleSubmit(assignment.id)}>Submit</button>
-                      ) : (
-                        <span style={{ color: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}><CheckCircle size={14} /> Done</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <ErpLayout title="Assignments" subtitle="Hand your work to your lecturer, then record it here.">
+      <Tabs label="Filter assignments" value={view} onChange={setView} tabs={[['open', 'To submit'], ['done', 'Submitted']]} />
+      {banner}
+      <Load state={state}>
+        {({ assignments }) => {
+          const list = assignments
+            .filter((a) => Boolean(a.submitted) === (view === 'done'))
+            .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
+          if (!list.length) return <Empty title={view === 'done' ? 'Nothing submitted yet' : 'Nothing waiting to be submitted'} />
+          return (
+            <div className="cards">
+              {list.map((a) => (
+                <article key={a.id} className="card">
+                  <div className="card-top"><h2>{a.title}</h2>{due(a)}</div>
+                  {a.description && <p className="pre">{a.description}</p>}
+                  <div className="card-foot">
+                    <span className="meta">Due {formatDate(a.due_date)}{a.max_marks ? ` · ${a.max_marks} marks` : ''}</span>
+                    {!a.submitted && (
+                      <button type="button" className="btn btn-small" disabled={busy === a.id} onClick={() => markSubmitted(a)}>Mark as submitted</button>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )
+        }}
+      </Load>
     </ErpLayout>
-  );
+  )
 }

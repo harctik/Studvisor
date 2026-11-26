@@ -1,49 +1,31 @@
-import { Bell, Grid } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Menu } from 'lucide-react'
 import { fetchProfile } from '../services/api'
+import useApi from '../lib/useApi'
 
-export default function Header() {
-  const [profile, setProfile] = useState({ name: "AVVARI NAGA HA..", student_id: "CAUG23-1492" })
+const initials = (name = '') => name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
 
-  useEffect(() => {
-    fetchProfile().then(res => {
-      if(res) {
-        setProfile({
-          name: res.name || res.full_name || "AVVARI NAGA HA..",
-          student_id: res.student_id || res.username || "CAUG23-1492"
-        })
-      }
-    }).catch(() => {})
-  }, [])
+export default function Header({ menuOpen, onMenu }) {
+  const { data: student } = useApi(fetchProfile)
+  const name = student && (student.full_name || student.username)
 
   return (
-    <div className="dashboard-header">
-      <div className="header-title">CHRIST ACADEMY INSTITUTE FOR ADVANCED STUDIES</div>
-
-      <div className="header-actions">
-        <div className="student-pill">STUDENT</div>
-        
-        <div className="header-icon">
-          <Bell size={20} />
-          <div className="notif-dot"></div>
-        </div>
-
-        <div className="header-icon">
-          <Grid size={20} />
-        </div>
-
-        <div className="profile-area">
-          <img 
-            src="https://ui-avatars.com/api/?name=Avvari+Naga&background=f4f6f8&color=333" 
-            alt="Profile" 
-            className="profile-pic"
-          />
-          <div className="profile-info">
-            <span className="profile-name">{profile.name}</span>
-            <span className="profile-id">Adm No: {profile.student_id}</span>
+    <header className="topbar">
+      <button type="button" className="icon-btn menu-btn" onClick={onMenu} aria-label="Open menu" aria-expanded={menuOpen} aria-controls="sidebar">
+        <Menu size={22} />
+      </button>
+      {student && (
+        <div className="who">
+          <div>
+            <strong>{name}</strong>
+            <span>
+              {[student.roll_number || student.username, student.department, student.semester && `Semester ${student.semester}`]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
           </div>
+          <span className="avatar" aria-hidden="true">{initials(name)}</span>
         </div>
-      </div>
-    </div>
+      )}
+    </header>
   )
 }
