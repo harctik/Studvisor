@@ -1,9 +1,11 @@
 """
 Advanced analytics engine — department metrics, faculty effectiveness, engagement tracking.
 """
-from sqlalchemy.orm import Session
 from collections import defaultdict
-from backend.app.models import Student, Faculty, Attendance, Mark, Subject, Complaint, LeaveRequest
+
+from sqlalchemy.orm import Session
+
+from backend.app.models import Attendance, Faculty, Mark, Student, Subject
 
 
 class AdvancedAnalyticsService:
@@ -36,7 +38,7 @@ class AdvancedAnalyticsService:
 
     def at_risk_students(self, db: Session, threshold: float = 65) -> list:
         """Students with attendance below threshold across any subject."""
-        students = db.query(Student).filter(Student.is_active == True).all()
+        students = db.query(Student).filter(Student.is_active.is_(True)).all()
         at_risk = []
         for s in students:
             records = db.query(Attendance).filter(Attendance.student_id == s.id).all()

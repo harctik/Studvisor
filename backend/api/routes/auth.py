@@ -1,13 +1,20 @@
 """Auth routes — login, register, refresh, profile."""
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from backend.app.crud import create_student, get_student_by_username
 from backend.app.database import get_db
-from backend.core.security import verify_password, create_access_token, create_refresh_token, get_current_student, get_current_user, decode_token
-from backend.app.crud import get_student_by_username, create_student
-from backend.app.models import Student, Faculty, Admin
+from backend.app.models import Admin, Faculty, Student
 from backend.core.config import get_settings
 from backend.core.demo_login import DEMO_PASSWORD, DEMO_STUDENT, DEMO_USERNAME, demo_login_allowed
+from backend.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    get_current_student,
+    verify_password,
+)
 
 router = APIRouter(tags=["Auth"])
 

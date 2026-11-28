@@ -1,3 +1,7 @@
+# Local databases and the anonymity salt
+*.db
+backend/data/
+
 # Dependencies
 node_modules/
 venv/

@@ -15,5 +15,6 @@ def setup_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+    engine.dispose()  # Windows cannot delete the SQLite file while pooled connections hold it
     if os.path.exists("test_studvisor.db"):
         os.remove("test_studvisor.db")

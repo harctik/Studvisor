@@ -1,9 +1,12 @@
 """
 Notification dispatcher — multi-channel: In-App, WebSocket, Email, SMS.
 """
+import logging
+import os
+
 from sqlalchemy.orm import Session
+
 from backend.app.models import Notification
-import logging, os
 
 logger = logging.getLogger("Studvisor.notifications")
 

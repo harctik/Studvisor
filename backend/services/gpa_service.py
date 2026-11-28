@@ -1,6 +1,8 @@
 """GPA/CGPA computation service."""
-from sqlalchemy.orm import Session
 from collections import defaultdict
+
+from sqlalchemy.orm import Session
+
 from backend.app.models import Mark, Subject
 
 GRADE_MAP = [(90,"O",10),(80,"A+",9),(70,"A",8),(60,"B+",7),(50,"B",6),(40,"C",5),(0,"F",0)]

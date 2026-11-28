@@ -1,10 +1,12 @@
 """
 v2.0 Background Tasks — Mood aggregation, audit persistence, and system maintenance.
 """
+from datetime import datetime
+
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from backend.app.models import MoodRawCheckin, MoodCheckin, Student
-from sqlalchemy import func
+
+from backend.app.models import MoodCheckin, MoodRawCheckin, Student
+
 
 def aggregate_mood_checkins(db: Session):
     """
@@ -13,7 +15,7 @@ def aggregate_mood_checkins(db: Session):
     """
     now = datetime.utcnow()
     week_number = now.isocalendar()[1]
-    
+
     # Get all distinct (inst, batch, section) from students who checked in this week
     groups = db.query(
         MoodRawCheckin.institution_id,
@@ -33,15 +35,15 @@ def aggregate_mood_checkins(db: Session):
                      Student.section == sect,
                      MoodRawCheckin.week_number == week_number
                  ).all()
-        
+
         if not raws:
             continue
-            
+
         scores = [r[0] for r in raws]
         avg_score = sum(scores) / len(scores)
         low_count = sum(1 for s in scores if s <= 2)
         high_count = sum(1 for s in scores if s >= 4)
-        
+
         # Check if aggregate already exists for this week
         agg = db.query(MoodCheckin).filter(
             MoodCheckin.institution_id == inst_id,
@@ -49,7 +51,7 @@ def aggregate_mood_checkins(db: Session):
             MoodCheckin.section == sect,
             MoodCheckin.week_number == week_number
         ).first()
-        
+
         if agg:
             agg.average_score = avg_score
             agg.low_mood_count = low_count

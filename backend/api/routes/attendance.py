@@ -1,11 +1,13 @@
 """Attendance routes — overall, subject-wise, heatmap, bunk alerts, simulate."""
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from collections import defaultdict
 from typing import Optional
-from backend.core.security import get_current_student
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
 from backend.app.database import get_db
 from backend.app.models import Attendance, Subject
+from backend.core.security import get_current_student
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 

@@ -1,6 +1,8 @@
 """Attendance computation service — subject-wise, heatmap, streaks."""
-from sqlalchemy.orm import Session
 from collections import defaultdict
+
+from sqlalchemy.orm import Session
+
 from backend.app.models import Attendance, Subject
 
 

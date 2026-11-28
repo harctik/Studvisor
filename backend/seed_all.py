@@ -2,13 +2,34 @@
 Seed all tables with realistic demo data for testing.
 Run: python -m backend.seed_all
 """
-import sys, os, random
+import calendar as cal
+import os
+import random
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.app.database import SessionLocal, engine
-from backend.app.models import *
+from backend.app.database import Base, SessionLocal, engine
+from backend.app.models import (
+    AcademicCalendar,
+    Admin,
+    Announcement,
+    Attendance,
+    Complaint,
+    Event,
+    Faculty,
+    FeeStructure,
+    LeaveRequest,
+    LibraryBook,
+    Mark,
+    PlacementDrive,
+    Student,
+    StudentFee,
+    Subject,
+    SyllabusTopic,
+    TimetableSlot,
+)
 from backend.core.security import hash_password
-from backend.app.database import Base
 
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
@@ -216,7 +237,6 @@ db.commit()
 print("  ✅ Fee structures and student fees seeded")
 
 # ─── Calendar ────────────────────────────────────────────────────────────────
-import calendar as cal
 holidays = {"2026-01-26": "Republic Day", "2026-03-14": "Holi", "2026-04-14": "Tamil New Year", "2026-08-15": "Independence Day", "2026-10-02": "Gandhi Jayanti", "2026-11-01": "Diwali", "2026-12-25": "Christmas"}
 for month in range(1, 13):
     for day in range(1, 29):

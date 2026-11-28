@@ -1,7 +1,7 @@
 """Complaint service — AI-powered routing and escalation."""
 from sqlalchemy.orm import Session
-from backend.app.models import Complaint, Student
-from backend.services.notification_service import notification_dispatcher
+
+from backend.app.models import Complaint
 
 # Auto-classification rules
 CATEGORY_KEYWORDS = {

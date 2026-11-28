@@ -2,11 +2,15 @@
 v2.0 AI Service — Integrated Anthropic/Ollama adapter.
 Provides unified chat and generation capabilities.
 """
-import os
-import json
 import asyncio
-from typing import List, Dict, Optional, AsyncGenerator
+import json
+import logging
+import os
+from typing import AsyncGenerator
+
 import httpx
+
+logger = logging.getLogger("Studvisor.ai")
 
 class AIService:
     def __init__(self):
@@ -70,7 +74,7 @@ class AIService:
             "anthropic-version": "2023-06-01",
             "content-type": "application/json"
         }
-        
+
         data = {
             "model": self.model,
             "max_tokens": 1024,
@@ -90,6 +94,7 @@ class AIService:
                             elif line_data["type"] == "message_stop":
                                 yield json.dumps({"token": "", "done": True})
         except Exception as e:
-            yield json.dumps({"token": f"Error: {str(e)}", "done": True})
+            logger.error("Anthropic stream failed", exc_info=e)
+            yield json.dumps({"token": "The assistant is unavailable right now.", "done": True})
 
 ai_service = AIService()

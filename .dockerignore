@@ -1,2 +1,6 @@
 .env*
 .git
+*.db
+backend/data/
+**/__pycache__
+frontend/node_modules

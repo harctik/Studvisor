@@ -1,204 +1,142 @@
-# Studvisor: Enterprise Academic ERP & Student Risk Analytics
+<img src="frontend/public/favicon.svg" alt="Studvisor logo" width="96">
 
-A college enterprise resource planning platform combining a FastAPI backend, role-based access control, rule-based dropout-risk scoring and an academic chat assistant.
+# Studvisor
 
-![Studvisor Banner](banner.png)
+Studvisor is a college management app. It has a FastAPI backend with APIs for students, faculty and admins, and a React web app for students.
 
----
+The web app covers attendance, timetable, exams, results, GPA, assignments, leave, fees, notes, library, placement, complaints, events, polls, a leaderboard and an anonymous campus wall. Faculty and admin features are available through the API only.
 
-## Technical Overview
+## Screenshots
 
-Higher education administrative systems typically suffer from fragmented databases, poor security audit trails, and reactive rather than proactive student support. Studvisor addresses these institutional bottlenecks by unifying administrative lifecycle management with rule-based early-warning risk scoring.
+These show the local app with seeded sample data.
 
-The platform executes three critical institutional functions:
-1. Early Academic Intervention: Rule-based scoring (`backend/services/predictive_service.py`) combines attendance trend, assignment submission rate, unpaid fees and overall attendance into a weighted dropout-risk score from 0 to 1, and lists the signals each student triggers.
-2. Academic Chat Assistant: The web app's chat uses a built-in rule-based chatbot and streams its reply word by word over Server-Sent Events. Separate `/v2/ai` API endpoints add the user's database records to the prompt for Anthropic's Claude (model ID `claude-3-sonnet-20240229` in the code). Without `ANTHROPIC_API_KEY`, the non-streaming call tries a local Ollama model and then returns a mock reply; the streaming call returns a mock reply.
-3. Attendance Amendments: The amend endpoint has a time limit and requires a reason. For older records, faculty can submit a request that a head of department (HOD) approves or rejects.
+![Sign-in screen](docs/screenshots/sign-in.png)
 
----
+![Student dashboard](docs/screenshots/dashboard.png)
 
-## Risk Scoring & Offline Model Comparison
+![Attendance](docs/screenshots/attendance.png)
 
-The risk scoring service is designed to flag students who may need support. The charts below come from a separate offline classifier comparison. This repository includes the chart images, but not a script or data file that produces them.
+![Fees](docs/screenshots/fees.png)
 
-### 1. Classifier Benchmarking & ROC Evaluation
+![Campus wall](docs/screenshots/campus-wall.png)
 
-An offline comparison of Random Forest, Gradient Boosting, HistGradient Boosting and Logistic Regression is shown below. Logistic Regression had the highest test AUC (0.958); the two gradient-boosting variants had the highest test accuracy (0.917 and 0.920). The production scoring service is rule-based; these classifiers are an offline benchmark.
+## How some features work
 
-![Model Comparison](docs/plots/model_comparison.png)
+**Risk scoring.** `backend/services/predictive_service.py` uses fixed rules, not a trained model. The dropout-risk score runs from 0 to 1 and looks at the change in attendance, assignment submissions, unpaid fees and overall attendance. It also lists the signals behind the score.
 
-The Receiver Operating Characteristic curves illustrate true positive versus false positive rates across decision thresholds. All four classifiers reach a test AUC above 0.93.
+**Chat.** The web chat uses a rule-based chatbot. The separate `/v2/ai` endpoints can add database records to a prompt and send it to Anthropic's API when `ANTHROPIC_API_KEY` is set. The model ID is fixed in `backend/services/ai_service.py` (`claude-3-sonnet-20240229`), and I have not checked that the API still accepts it. Without a key, or if the request fails, the non-streaming call tries a local Ollama server and then returns a placeholder reply. The streaming call returns a placeholder reply when there is no key.
 
-![ROC Curves](docs/plots/roc_curves.png)
+**Fees.** There is no payment gateway. `POST /fees/pay` only records a payment claim as pending. The fee balance changes when an admin approves the claim through `/fees/admin/claims/{id}/approve`. Admins can also reject it. The web app shows fees but has no screen for sending or reviewing claims.
 
-### 2. Feature Attribution & Risk Stratification
+**Attendance changes.** The amend endpoint requires a reason and closes 24 hours after 17:00 on the class date, compared in UTC. After that, faculty can send a request for a head of department to approve or reject. The attendance marking endpoint can still overwrite a record at any time.
 
-The feature chart shows absolute Logistic Regression coefficients from the offline comparison. The largest are attendance percentage, CGPA, backlogs, stress level and average internal marks. These are not the weights used by the rule-based scoring service.
+## Access control
 
-![Feature Importance](docs/plots/feature_importance.png)
+- Login tokens are JWTs signed with HS256. By default, access tokens last 120 minutes and refresh tokens 7 days. Refresh tokens are not replaced when used.
+- Protected routes check the role in the token. The roles in the code are student, faculty, HOD, admin and parent.
+- The campus wall, notes, search, leaderboard, faculty directory and chat stream require sign-in.
+- The WebSocket at `/ws/{uid}` expects `{"type": "auth", "token": "..."}` as its first message. The token must be a student access token for that ID.
+- POST, PUT, PATCH and DELETE requests are written to an audit log in the database, apart from some chat routes. Entries for anonymous wall routes leave out the sender and IP address.
+- Wall posts are not returned with an author. The database stores a shortened HMAC of the student ID, keyed with a salt that changes daily, instead of the ID. The web server's own access log can still record IP addresses, so this does not hide a poster from whoever runs the server.
 
-The risk distribution chart shows risk categories and engagement risk scores for the offline dataset, with a threshold of 55. These are separate from the risk levels returned by the scoring service.
+Known gaps, to deal with before using this with real students:
 
-![Risk Distribution](docs/plots/risk_distribution.png)
+- Anyone who can reach the API can register a student account.
+- Calendar, exams, announcements, events, polls, lost and found, library catalog, placement drives, clubs, transport routes and scholarships can be read without signing in.
+- The faculty plagiarism check and exam readiness AI endpoints do not check that the faculty member teaches the subject.
+- A default rate limit is configured in `backend/main.py`, but the middleware that applies it is not added. Do not rely on rate limiting.
 
-In the Logistic Regression confusion matrix, the classifier identified 62 of 75 at-risk cases (83% recall) and missed 13. Of the 87 cases it flagged, 62 were at risk (71% precision).
-
-![Confusion Matrix](docs/plots/confusion_matrix.png)
-
----
-
-## System Architecture
-
-```text
-[ Frontend: React 19 + Vite ]
-                     |
-                     | (RESTful JSON / SSE Streaming / JWT Bearer)
-                     v
-       [ FastAPI Application Layer ]
-                     |
-      +--------------+--------------+
-      |                             |
-[ Security Gateway ]       [ Business Domain Services ]
-      |                             |
-      +---> JWT Verification        +---> Risk Scoring Engine (Dropout / Failure)
-      +---> Role-Based Access       +---> Timetable Generator & Conflict Detector
-      +---> Audit Logger Middleware +---> Merit Points & Leaderboard
-      |                             +---> HTML Marksheets & CSV Export
-      v                             |
-[ SQLite default / PostgreSQL ]     v
-(PostgreSQL in Compose)     [ Anthropic / Ollama Adapter ]
-                            (Database context in prompts)
-```
-
----
-
-## Security & Access Control
-
-What the current code does:
-
-1. Authentication: JSON Web Tokens signed with HS256. By default, access tokens last 120 minutes and refresh tokens 7 days. `/refresh` issues a new access token; refresh tokens are not rotated.
-2. Role Checks: FastAPI dependencies and a route-prefix middleware check the role in the token. Roles are student, faculty, HOD, admin and parent.
-3. Attendance Amendments: The amend endpoint closes 24 hours after 17:00 on the class date (compared in UTC). Later changes can go through a single HOD approval. The attendance marking endpoint can also overwrite existing records and has no time limit.
-4. Audit Logging: Middleware writes a server log line with the method, path, response status, actor and IP address for POST, PUT, PATCH and DELETE requests, except some chat routes. Saving these entries to the database does not currently work.
-5. Campus Wall: Anonymous posts are stored with a truncated HMAC-SHA256 of the student ID, using a salt that changes daily, instead of the ID itself. The server log described above still records who sent each request.
-
----
-
-## Data Model Specifications
-
-The persistence layer defines 44 SQLAlchemy models. Alembic is set up, but the repository contains no migration files. Selected models:
-
-| Entity Category | Selected Models | Operational Responsibility |
-|---|---|---|
-| People | Student, Faculty, Admin, Parent | Records for each type of user |
-| Academic Structure | Subject, SyllabusTopic, CourseEnrollment, TimetableSlot, AcademicCalendar | Subjects, syllabus topics, enrollment and scheduling |
-| Performance | Attendance, Mark, GPARecord, ExamSchedule, Assignment, AssignmentSubmission | Attendance, marks, GPA, exams and coursework |
-| Risk Scoring | AIRiskScore | Schema for stored risk scores and signals; defined, but not yet used by the scoring service |
-| AI Chat | ChatHistory | Chat queries, responses, page context and session IDs |
-
----
-
-## Repository Structure
+## Project layout
 
 ```text
-Studvisor/
-├── backend/
-│   ├── main.py                # FastAPI app, middleware and CORS setup
-│   ├── api/
-│   │   └── routes/
-│   │       ├── admin.py          # Dashboard, users, leave and reports
-│   │       ├── faculty_portal.py # Attendance, marks, leave and assignments
-│   │       ├── student.py        # Profile and mood check-in
-│   │       ├── ai_engine.py      # AI chat and related AI endpoints
-│   │       ├── reports.py        # HTML marksheets, certificates and fee receipts
-│   │       └── ...               # Other route modules
-│   ├── core/
-│   │   ├── config.py          # Environment settings
-│   │   ├── security.py        # Password hashing, tokens and role checks
-│   │   └── ai_context.py      # Role-specific database context for AI prompts
-│   ├── middleware/
-│   │   ├── audit_log.py       # Logging of write requests
-│   │   └── role_guard.py      # Role checks by route prefix
-│   ├── services/
-│   │   ├── predictive_service.py  # Rule-based risk scoring
-│   │   ├── merit_service.py       # Merit points, tiers and leaderboard
-│   │   ├── timetable_service.py   # Timetable conflict detection
-│   │   └── ...                    # Other services
-│   └── app/
-│       ├── database.py        # Database engine and sessions
-│       ├── middleware.py      # Request logging and security headers
-│       ├── models.py          # SQLAlchemy models
-│       └── schemas.py         # Pydantic data validation models
-├── frontend/                # React and Vite interface
-├── docs/plots/              # Offline model evaluation charts
-├── tests/                   # Pytest API tests
-├── alembic/                 # Alembic setup (no migration files yet)
-├── docker-compose.yml       # Multi-container setup
-└── Dockerfile               # Container build definition
+backend/
+  main.py         FastAPI app, middleware and error handling
+  api/routes/     HTTP and WebSocket routes
+  app/            database models (45 tables), schemas and the rule-based chatbot
+  core/           settings, tokens, role checks and the local test sign-in
+  middleware/     audit log and role checks by route prefix
+  services/       risk scoring, AI adapter, timetable checks and other logic
+frontend/         React 19 and Vite web app
+tests/            pytest tests
+alembic/          Alembic setup, with no migration files yet
 ```
 
----
+The app creates missing tables when it starts. It does not alter existing tables.
 
-## Local Development & Setup
+## Run it locally
 
-### 1. Repository Setup
+You need Python and Node.js. CI uses Python 3.13, and the Docker build of the web app uses Node 20.
+
 ```bash
 git clone https://github.com/harctik/Studvisor.git
 cd Studvisor
 python -m venv venv
 
-# Windows:
+# Windows
 venv\Scripts\activate
-# Linux/macOS:
+# Linux or macOS
 source venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
-### 2. Configuration & Database Initialization
-
-`SECRET_KEY` is required. It signs login tokens, so use a private random value and keep it out of Git. Generate one with the command below, then add it as `SECRET_KEY=your-value` to a `.env` file in the repository root. The app and Docker Compose both read it from there.
+`SECRET_KEY` is required. It signs login tokens, so use a private random value and keep it out of Git. Generate one:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-The default database is a local SQLite file. To change other settings, set environment variables such as `DATABASE_URL`, `ANTHROPIC_API_KEY`, `OLLAMA_URL` and `OLLAMA_MODEL` in your shell. The repository has no `.env.example` file.
+Add it to a `.env` file in the repository root as `SECRET_KEY=your-value`.
+
+The default database is a local SQLite file. Before seeding, set `SEED_ADMIN_PASSWORD`, `SEED_FACULTY_PASSWORD` and `SEED_STUDENT_PASSWORD` in your shell. If you skip this, the script uses fixed defaults that anyone can read in the source. The seed script is meant for an empty database.
 
 ```bash
 python -m backend.seed_all
-```
-
-#### Test sign-in (local only)
-
-For testing on your own computer, add `DEMO_LOGIN=true` to `.env` and seed the database. You can then sign in with the username `admin` and the password `admin`. It opens the demo student's account, because the web screens are for students only.
-
-It is off by default. It only accepts requests from the same computer that carry no proxy headers, and it stays off on common hosting services. Leave it unset anywhere other people can reach.
-
-### 3. Launching the Backend Service
-```bash
 uvicorn backend.main:app --reload --port 8000
 ```
 
-### 4. Executing the Test Suite
+In a second terminal, start the web app:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The web app calls the API at `http://127.0.0.1:8000` unless `VITE_API_BASE_URL` says otherwise.
+
+Settings such as `DATABASE_URL` and `DEMO_LOGIN` can go in `.env`. Set `CORS_ORIGINS`, `ANTHROPIC_API_KEY`, `OLLAMA_URL`, `OLLAMA_MODEL` and the seed passwords in your shell, because the code reads them directly from the environment.
+
+### Test sign-in (local only)
+
+There is a shortcut for testing on your own computer. Add `DEMO_LOGIN=true` to `.env`, seed the database and start the API. The username and password for the shortcut are defined in `backend/core/demo_login.py`. It opens the demo student's account, because the web screens are for students only.
+
+It is off by default. It only accepts requests from the same computer that carry no proxy headers, and it stays off on the hosting services the code checks for. Leave it unset anywhere other people can reach.
+
+## Tests and lint
+
 ```bash
 pytest tests/ -v
+ruff check backend/
 ```
 
-### 5. Multi-Container Orchestration
+Ruff is not listed in `requirements.txt`, so install it with `pip install ruff`. Its settings are in `pyproject.toml`. The CI workflow in `.github/workflows/ci.yml` runs lint and tests, then builds the backend Docker image and checks `/health`.
+
+## Docker Compose
+
+`docker-compose.yml` defines PostgreSQL, the API and the web app. It reads `SECRET_KEY` from `.env`.
+
 ```bash
-docker-compose up --build -d
+docker compose up --build
 ```
 
----
+Use it for local development only. It has a fixed database password, publishes the database port, runs the API with auto-reload and runs the seed script each time the API container starts.
 
-## Author and Engineering Attribution
+## Author
 
-All architecture, backend API design, database schemas, risk scoring, and AI integration in this repository were engineered end-to-end by Avvari Naga Harthikanand (Harthik).
+Built by Avvari Naga Harthikanand (Harthik), Bangalore, Karnataka, India.
 
-Developer: Avvari Naga Harthikanand
-Location: Bangalore, Karnataka, India
-LinkedIn: https://www.linkedin.com/in/harthik
-GitHub: https://github.com/harctik
-Email: harthikanand90@gmail.com
-License: MIT License
+- Repository: https://github.com/harctik/Studvisor.git
+- LinkedIn: https://www.linkedin.com/in/harthik
+- GitHub: https://github.com/harctik
+- Email: harthikanand90@gmail.com

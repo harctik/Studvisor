@@ -4,13 +4,14 @@ Three-layer RBAC: JWT claim → route guard → service scope.
 """
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import Depends, HTTPException, Request
+
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import jwt, JWTError
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from backend.app.database import get_db
 
+from backend.app.database import get_db
 from backend.core.config import get_settings
 
 settings = get_settings()

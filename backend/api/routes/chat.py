@@ -1,16 +1,17 @@
 """Chat routes — wired to the AI chatbot engine with history and streaming."""
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
+import asyncio
+import json
 from typing import Optional
-import json, asyncio
 
-from backend.core.security import get_current_student
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from backend.app.chatbot import detect_emotion, process_chat
 from backend.app.database import get_db
 from backend.app.models import ChatHistory
-from backend.app.chatbot import process_chat, detect_emotion
-
+from backend.core.security import get_current_student
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 

@@ -3,13 +3,13 @@ Studvisor v2.0 — AI Chatbot Engine
 Deterministic ERP queries + RAG fallback + Emotion-aware responses.
 Context-injected per role via core/ai_context.py.
 """
-from sqlalchemy.orm import Session
-from collections import defaultdict
 import re
+from collections import defaultdict
 
-from backend.app.models import Student, Attendance, Mark, Subject, LeaveRequest, ExamSchedule
+from sqlalchemy.orm import Session
+
+from backend.app.models import Attendance, ExamSchedule, LeaveRequest, Mark, Student, Subject
 from backend.services.gpa_service import gpa_service, percentage_to_grade
-
 
 # ─── INTENT DETECTION ───────────────────────────────────────────────────────
 
@@ -44,18 +44,26 @@ def detect_intent(message: str) -> str:
 
 # ─── EMOTION DETECTION ───────────────────────────────────────────────────────
 
+FRUSTRATION_PATTERN = re.compile(
+    r"\b(hate|frustrat(ed|ing)|annoyed|fed up|give up|giving up|too hard|impossible|"
+    r"(can'?t|cannot) understand)\b"
+)
+
+
 def detect_emotion(message: str) -> str:
     """Stage 1 of emotion-aware system. Uses SentimentService for robust detection."""
     from backend.services.sentiment_service import sentiment_service
     analysis = sentiment_service.analyze(message)
-    
+
     if analysis["is_distress"]:
         return "distressed"
-    if analysis["is_toxic"]:
+
+    # "is_toxic" is a moderation threshold (three or more flagged words), so on its own
+    # it misses ordinary frustration such as "I hate this subject".
+    lowered = message.lower().replace("\u2019", "'")
+    if analysis["is_toxic"] or FRUSTRATION_PATTERN.search(lowered):
         return "frustrated"
-    
-    # Fallback to simple matching for positive/anxious if sentiment service is neutral
-    lowered = message.lower()
+
     anxious_words = ["stressed", "worried", "anxious", "nervous", "scared", "overwhelmed", "panic"]
     positive_words = ["great", "awesome", "happy", "excited", "love", "amazing", "perfect"]
 
@@ -329,12 +337,12 @@ def handle_thank(student: Student) -> str:
 
 
 def handle_distressed(student: Student) -> str:
-    return f"""{student.full_name}, I'm detecting that you're going through a really tough time. 💙 
+    return f"""{student.full_name}, I'm detecting that you're going through a really tough time. 💙
 Please know that you're not alone, and there's help available.
 
-1. **Student Support Cell** — Open 24/7 for anyone feeling overwhelmed
+1. **Student Support Cell** — Ask your college when and how to reach it
 2. **Campus Counsellor** — You can book an anonymous session via the 'Campus' tab
-3. **Emergency Helpline** — Call 1800-Studvisor-CARE immediately if you need someone to talk to right now.
+3. **Right now** — If you might be in danger, call your local emergency number or a crisis helpline, or go to someone you trust.
 
 Academic pressure is real, but your well-being is much more important. Would you like me to notify your faculty advisor to reach out for a supportive chat?"""
 

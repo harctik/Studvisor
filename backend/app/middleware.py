@@ -1,8 +1,9 @@
 """Request logging + security headers middleware."""
-import time, logging
+import logging
+import time
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
 
 logger = logging.getLogger("Studvisor.middleware")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")

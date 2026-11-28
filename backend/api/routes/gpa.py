@@ -1,10 +1,11 @@
 """GPA/CGPA service + routes."""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from collections import defaultdict
-from backend.core.security import get_current_student
+
 from backend.app.database import get_db
 from backend.app.models import Mark, Subject
+from backend.core.security import get_current_student
 
 router = APIRouter(prefix="/gpa", tags=["GPA"])
 
@@ -26,7 +27,7 @@ def cgpa(student=Depends(get_current_student), db: Session = Depends(get_db)):
     # into a single grade point entry rather than triple-counting credits.
     marks = db.query(Mark).filter(
         Mark.student_id == student.id,
-        Mark.published == True,
+        Mark.published.is_(True),
     ).all()
 
     # Group raw scores by (semester, subject_id)
@@ -74,7 +75,7 @@ def semester_gpa(sem: str, student=Depends(get_current_student), db: Session = D
     marks = db.query(Mark).filter(
         Mark.student_id == student.id,
         Mark.semester == sem,
-        Mark.published == True,
+        Mark.published.is_(True),
     ).all()
 
     from collections import defaultdict as _dd

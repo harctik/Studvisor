@@ -1,11 +1,13 @@
 """Calendar, Documents, Bunk Alerts, Anon Chat — lightweight routes."""
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from backend.core.security import get_current_student
-from backend.app.database import get_db
-from backend.app.models import AcademicCalendar, Attendance, Subject, AnonPost, AnonReaction
 from collections import defaultdict
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from backend.app.database import get_db
+from backend.app.models import AcademicCalendar, AnonPost, AnonReaction, Attendance, Subject
+from backend.core.security import get_current_student, get_current_user
 
 # Calendar
 calendar_router = APIRouter(prefix="/calendar", tags=["Calendar"])
@@ -45,8 +47,8 @@ class AnonPostCreate(BaseModel):
     category: str = "general"
 
 @anon_chat_router.get("/posts")
-def list_posts(db: Session = Depends(get_db)):
-    posts = db.query(AnonPost).filter(AnonPost.moderated == False).order_by(AnonPost.created_at.desc()).limit(50).all()
+def list_posts(_=Depends(get_current_user), db: Session = Depends(get_db)):
+    posts = db.query(AnonPost).filter(AnonPost.moderated.is_(False)).order_by(AnonPost.created_at.desc()).limit(50).all()
     result = []
     for p in posts:
         reactions = db.query(AnonReaction).filter(AnonReaction.post_id == p.id).all()
@@ -57,26 +59,25 @@ def list_posts(db: Session = Depends(get_db)):
 
 @anon_chat_router.post("/posts")
 def create_post(data: AnonPostCreate, student=Depends(get_current_student), db: Session = Depends(get_db)):
-    from backend.services.sentiment_service import sentiment_service
+
     from backend.services.anonymity_service import compute_anon_id
-    import hashlib
-    
+    from backend.services.sentiment_service import sentiment_service
+
     # Analyze sentiment
     analysis = sentiment_service.analyze(data.content)
-    
+
     session_hash = compute_anon_id(student.id)
     post = AnonPost(
-        session_hash=session_hash, 
-        content=data.content, 
+        session_hash=session_hash,
+        content=data.content,
         category=data.category,
         moderated=analysis["needs_moderation"],
-        toxicity_score=analysis["toxicity_score"]
     )
     db.add(post)
     db.commit()
-    
+
     return {
-        "message": "Posted anonymously", 
+        "message": "Posted anonymously",
         "moderated": post.moderated,
         "warning": "Post pending moderation due to community guidelines" if post.moderated else None
     }

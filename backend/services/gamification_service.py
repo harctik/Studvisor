@@ -1,10 +1,10 @@
 """
 Gamification Engine — Achievements, badges, XP, and peer mentor matching.
 """
-from sqlalchemy.orm import Session
-from backend.app.models import Student, Attendance, Mark, Assignment, AssignmentSubmission, Subject
-from collections import defaultdict
 
+from sqlalchemy.orm import Session
+
+from backend.app.models import AssignmentSubmission, Attendance, Mark, Student, Subject
 
 BADGE_DEFINITIONS = {
     "perfect_attendance_week": {"name": "Perfect Week", "description": "100% attendance for 7 consecutive days", "xp": 50},
@@ -33,7 +33,6 @@ class GamificationService:
 
         # 30-day streak
         streak = 0
-        prev_date = None
         for r in records:
             if r.status == "P":
                 streak += 1

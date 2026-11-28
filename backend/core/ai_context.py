@@ -3,7 +3,8 @@ AI Context Builder — injects role-specific data into LLM system prompts.
 Each role gets a different context blob so the AI has relevant data without extra API calls.
 """
 from sqlalchemy.orm import Session
-from backend.app.models import Student, Attendance, Mark, Subject, LeaveRequest, Assignment, ExamSchedule
+
+from backend.app.models import Attendance, ExamSchedule, LeaveRequest, Mark, Student, Subject
 from backend.services.gpa_service import gpa_service
 
 
@@ -103,7 +104,7 @@ You have access to this faculty member's class data. Never reveal data from othe
 
 def build_admin_context(db: Session) -> str:
     """Build context for admin AI chat: institution-wide KPIs."""
-    from backend.app.models import Student, Faculty, Complaint, LeaveRequest
+    from backend.app.models import Complaint, Faculty, LeaveRequest, Student
     total_students = db.query(Student).count()
     total_faculty = db.query(Faculty).count()
     open_complaints = db.query(Complaint).filter(Complaint.status == "Submitted").count()

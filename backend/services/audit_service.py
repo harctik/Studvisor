@@ -1,7 +1,9 @@
 """Audit service — log all state-changing actions to audit_logs table."""
-from sqlalchemy.orm import Session
-from backend.app.models import AuditLog
 import json
+
+from sqlalchemy.orm import Session
+
+from backend.app.models import AuditLog
 
 
 def log_action(db: Session, actor_role: str, actor_id: int, actor_username: str,

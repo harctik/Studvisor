@@ -2,14 +2,18 @@
 Academic Intervention Engine — rule-based risk scoring.
 Two risk scores: Dropout and Academic Failure.
 """
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
 from collections import defaultdict
-import math
+
+from sqlalchemy.orm import Session
 
 from backend.app.models import (
-    Student, Attendance, Mark, LeaveRequest, Assignment, AssignmentSubmission,
-    Subject, StudentFee
+    Assignment,
+    AssignmentSubmission,
+    Attendance,
+    Mark,
+    Student,
+    StudentFee,
+    Subject,
 )
 
 

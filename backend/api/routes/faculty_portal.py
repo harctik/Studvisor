@@ -1,14 +1,26 @@
 """Faculty portal — attendance marking, grade upload, assignments, leave approval, announcements, AI insights."""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List, Optional
-from collections import defaultdict
-from backend.core.security import get_current_faculty, require_role
-from backend.app.database import get_db
-from backend.app.models import *
-
 from datetime import datetime, timedelta
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from backend.app.database import get_db
+from backend.app.models import (
+    Announcement,
+    Assignment,
+    AssignmentSubmission,
+    Attendance,
+    AttendanceAmendmentRequest,
+    Faculty,
+    LeaveRequest,
+    Mark,
+    Student,
+    Subject,
+    TimetableSlot,
+)
+from backend.core.security import get_current_faculty, require_role
 
 router = APIRouter(prefix="/faculty-portal", tags=["Faculty Portal"])
 
@@ -61,7 +73,7 @@ def mark_attendance(data: AttendanceMarkRequest, faculty=Depends(get_current_fac
 def amend_attendance(record_id: int, new_status: str, reason: str, faculty=Depends(get_current_faculty), db: Session = Depends(get_db)):
     record = db.query(Attendance).filter(Attendance.id == record_id).first()
     if not record: raise HTTPException(status_code=404, detail="Record not found")
-    
+
     # Ownership check
     verify_subject_ownership(faculty, record.subject_id, db)
 
@@ -85,7 +97,7 @@ def request_amendment(record_id: int, new_status: str, reason: str, faculty=Depe
     record = db.query(Attendance).filter(Attendance.id == record_id).first()
     if not record: raise HTTPException(404, "Record not found")
     verify_subject_ownership(faculty, record.subject_id, db)
-    
+
     req = AttendanceAmendmentRequest(
         attendance_id=record_id,
         faculty_id=faculty.id,
@@ -107,7 +119,7 @@ def hod_pending_amendments(faculty=Depends(require_role("hod")), db: Session = D
         subj = db.query(Subject).filter(Subject.id == att.subject_id).first() if att else None
         fac = db.query(Faculty).filter(Faculty.id == r.faculty_id).first()
         result.append({
-            "id": r.id, "faculty": fac.name if fac else "?", 
+            "id": r.id, "faculty": fac.name if fac else "?",
             "subject": subj.name if subj else "?", "date": att.date if att else "?",
             "old_status": att.status if att else "?", "new_status": r.new_status,
             "reason": r.reason
@@ -119,18 +131,18 @@ def hod_approve_amendment(req_id: int, approve: bool = True, remarks: str = "", 
     """HOD approves or rejects the amendment."""
     req = db.query(AttendanceAmendmentRequest).filter(AttendanceAmendmentRequest.id == req_id).first()
     if not req: raise HTTPException(404, "Request not found")
-    
+
     req.status = "Approved" if approve else "Rejected"
     req.hod_remarks = remarks
     req.processed_at = datetime.utcnow()
-    
+
     if approve:
         att = db.query(Attendance).filter(Attendance.id == req.attendance_id).first()
         if att:
             att.status = req.new_status
             att.amended_by = req.faculty_id
             att.amended_at = datetime.utcnow()
-            
+
     db.commit()
     return {"message": f"Amendment request {req.status}"}
 
@@ -166,12 +178,12 @@ def upload_marks(data: MarkUploadRequest, faculty=Depends(get_current_faculty), 
     count = 0
     for entry in data.entries:
         db.add(Mark(
-            student_id=entry.student_id, 
-            subject_id=data.subject_id, 
-            marks_obtained=entry.marks_obtained, 
-            max_marks=entry.max_marks, 
-            assessment_type=data.assessment_type, 
-            semester=data.semester, 
+            student_id=entry.student_id,
+            subject_id=data.subject_id,
+            marks_obtained=entry.marks_obtained,
+            max_marks=entry.max_marks,
+            assessment_type=data.assessment_type,
+            semester=data.semester,
             uploaded_by=faculty.id,
             published=False
         ))
@@ -182,7 +194,7 @@ def upload_marks(data: MarkUploadRequest, faculty=Depends(get_current_faculty), 
 @router.post("/marks/publish")
 def publish_marks(subject_id: int, assessment_type: str, faculty=Depends(get_current_faculty), db: Session = Depends(get_db)):
     verify_subject_ownership(faculty, subject_id, db)
-    marks = db.query(Mark).filter(Mark.subject_id == subject_id, Mark.assessment_type == assessment_type, Mark.published == False).all()
+    marks = db.query(Mark).filter(Mark.subject_id == subject_id, Mark.assessment_type == assessment_type, Mark.published.is_(False)).all()
     for m in marks:
         m.published = True
         m.date_published = datetime.utcnow()
@@ -219,7 +231,7 @@ def approve_leave(lid: int, faculty=Depends(get_current_faculty), db: Session = 
 @router.get("/hod/leave/pending")
 def hod_pending_leave(faculty=Depends(require_role("hod")), db: Session = Depends(get_db)):
     """HOD sees leaves already approved by faculty advisor, awaiting HOD sign-off."""
-    
+
     leaves = db.query(LeaveRequest).filter(LeaveRequest.status == "Faculty_Approved").order_by(LeaveRequest.applied_on.desc()).all()
     result = []
     for l in leaves:
@@ -229,12 +241,12 @@ def hod_pending_leave(faculty=Depends(require_role("hod")), db: Session = Depend
 
 @router.put("/hod/leave/{lid}/approve")
 def hod_approve_leave(lid: int, faculty=Depends(require_role("hod")), db: Session = Depends(get_db)):
-    
+
     leave = db.query(LeaveRequest).filter(LeaveRequest.id == lid).first()
     if not leave: raise HTTPException(status_code=404, detail="Not found")
     if leave.status != "Faculty_Approved":
         raise HTTPException(status_code=400, detail="Leave must be faculty-approved first")
-        
+
     leave.status = "HOD_Approved"
     # Assuming the 'faculty' object here is the HOD
     db.commit()

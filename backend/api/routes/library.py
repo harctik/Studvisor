@@ -1,10 +1,12 @@
 """Library management routes."""
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from backend.core.security import get_current_student, require_role
+
 from backend.app.database import get_db
-from backend.app.models import LibraryBook, BookIssue
+from backend.app.models import BookIssue, LibraryBook
+from backend.core.security import get_current_student
 
 router = APIRouter(prefix="/library", tags=["Library"])
 

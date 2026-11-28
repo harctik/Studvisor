@@ -1,20 +1,34 @@
 """Admin routes — dashboard, user mgmt, leave admin, reports."""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 from typing import Optional
-from backend.core.security import require_role
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from backend.app.database import get_db
-from backend.app.models import Student, Faculty, Admin, LeaveRequest, Complaint, Mark, Attendance, StudentFee, PlacementDrive, PlacementApplication, Subject
+from backend.app.models import (
+    Admin,
+    Attendance,
+    Complaint,
+    Faculty,
+    LeaveRequest,
+    PlacementApplication,
+    PlacementDrive,
+    Student,
+    StudentFee,
+    Subject,
+)
+from backend.core.security import require_role
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 @router.get("/dashboard/v2")
 def dashboard_v2(_=Depends(require_role("admin")), db: Session = Depends(get_db)):
     """Enterprise-grade integrated dashboard with cross-module analytics."""
-    from sqlalchemy import func
-    from datetime import datetime, timedelta
-    
+    from datetime import datetime
+
+    from sqlalchemy import case, func
+
     # 1. Identity & Scale
     counts = {
         "students": db.query(Student).count(),
@@ -22,7 +36,7 @@ def dashboard_v2(_=Depends(require_role("admin")), db: Session = Depends(get_db)
         "subjects": db.query(Subject).count(),
         "admins": db.query(Admin).count()
     }
-    
+
     # 2. Financial Health
     fees = db.query(
         func.sum(StudentFee.amount_due).label("total"),
@@ -34,29 +48,29 @@ def dashboard_v2(_=Depends(require_role("admin")), db: Session = Depends(get_db)
         "collection_rate": round((fees.collected / fees.total * 100), 1) if fees.total and fees.total > 0 else 0,
         "overdue_count": db.query(StudentFee).filter(StudentFee.status == "Overdue").count()
     }
-    
+
     # 3. Academic & Engagement
     today = datetime.now().strftime("%Y-%m-%d")
     daily_att = db.query(Attendance).filter(Attendance.date == today).all()
     campus_attendance = round(sum(1 for a in daily_att if a.status == "P") / len(daily_att) * 100, 1) if daily_att else 0
-    
+
     academic = {
         "daily_attendance": campus_attendance,
         "at_risk_students": db.query(Student).filter(Student.id.in_(
             db.query(Attendance.student_id).group_by(Attendance.student_id).having(
-                func.sum(func.case([(Attendance.status == 'P', 1)], else_=0)) / func.count(Attendance.id) < 0.75
+                func.sum(case((Attendance.status == 'P', 1), else_=0)) * 1.0 / func.count(Attendance.id) < 0.75
             )
         )).count(),
         "open_complaints": db.query(Complaint).filter(Complaint.status == "Submitted").count(),
         "pending_leaves": db.query(LeaveRequest).filter(LeaveRequest.status == "Pending").count()
     }
-    
+
     # 4. Placement Activity
     placement = {
         "active_drives": db.query(PlacementDrive).filter(PlacementDrive.status == "Open").count(),
         "total_offers": db.query(PlacementApplication).filter(PlacementApplication.status == "Offered").count()
     }
-    
+
     return {
         "counts": counts,
         "financials": financials,
@@ -135,7 +149,7 @@ def mood_analytics(batch_year: Optional[int] = None, section: Optional[str] = No
     q = db.query(MoodCheckin)
     if batch_year: q = q.filter(MoodCheckin.batch_year == batch_year)
     if section: q = q.filter(MoodCheckin.section == section)
-    
+
     results = q.order_by(MoodCheckin.week_number.desc()).limit(20).all()
     return {
         "trends": [

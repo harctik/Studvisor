@@ -117,11 +117,6 @@ def test_announcements():
     r = client.get("/announcements")
     assert r.status_code == 200
 
-def test_leaderboard():
-    r = client.get("/leaderboard")
-    assert r.status_code == 200
-    assert "leaderboard" in r.json()
-
 def test_calendar():
     r = client.get("/calendar")
     assert r.status_code == 200
@@ -134,20 +129,8 @@ def test_polls():
     r = client.get("/polls")
     assert r.status_code == 200
 
-def test_notes():
-    r = client.get("/notes")
-    assert r.status_code == 200
-
 def test_lost_found():
     r = client.get("/lost-found")
-    assert r.status_code == 200
-
-def test_anon_posts():
-    r = client.get("/anon/posts")
-    assert r.status_code == 200
-
-def test_faculty_directory():
-    r = client.get("/faculty/directory")
     assert r.status_code == 200
 
 

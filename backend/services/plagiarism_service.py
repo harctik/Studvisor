@@ -3,10 +3,10 @@ Plagiarism detection service — semantic similarity between assignment submissi
 Stage 1: MinHash LSH for fast candidate selection
 Stage 2: Cosine similarity on word frequency vectors
 """
-from collections import Counter
-import math
 import hashlib
+import math
 import re
+from collections import Counter
 
 
 def _tokenize(text: str) -> list:

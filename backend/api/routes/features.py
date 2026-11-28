@@ -1,13 +1,36 @@
 """All campus feature routes in one file — complaints, notifications, merit, timetable, analytics, assignments, exams, syllabus, notes, polls, events, announcements, faculty, lost-found, achievements, leaderboard."""
+from collections import defaultdict
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from collections import defaultdict
-from pydantic import BaseModel
-from typing import Optional
-from backend.core.security import get_current_student, require_role
+
 from backend.app.database import get_db
-from backend.app.models import *
+from backend.app.models import (
+    Achievement,
+    Announcement,
+    Assignment,
+    AssignmentSubmission,
+    Complaint,
+    Event,
+    EventRSVP,
+    ExamSchedule,
+    Faculty,
+    LostFound,
+    MeritLog,
+    Note,
+    Notification,
+    Poll,
+    PollOption,
+    PollVote,
+    Student,
+    Subject,
+    SyllabusTopic,
+    TimetableSlot,
+)
+from backend.core.security import get_current_student, get_current_user, require_role
 
 # Create all routers
 complaint_router = APIRouter(prefix="/complaints", tags=["Complaints"])
@@ -33,36 +56,35 @@ peer_matching_router = APIRouter(prefix="/peer-matching", tags=["AI Peer Matchin
 async def find_matches(student=Depends(get_current_student), db: Session = Depends(get_db)):
     """AI matches student with others who are strong in subjects where this student is weak."""
     from backend.app.models import Mark, Subject
-    from backend.services.ai_service import ai_service
-    
+
     # Find student's weak subjects (avg < 50)
     marks = db.query(Mark).filter(Mark.student_id == student.id).all()
     subject_marks = defaultdict(list)
     for m in marks:
         subject_marks[m.subject_id].append(m.marks_obtained / m.max_marks * 100)
-    
+
     weak_subjects = []
     for sid, pcts in subject_marks.items():
         if sum(pcts)/len(pcts) < 50:
             subj = db.query(Subject).filter(Subject.id == sid).first()
             if subj: weak_subjects.append(subj.name)
-            
+
     if not weak_subjects:
         return {"matches": [], "message": "You are performing great in all subjects! You can be a mentor."}
-        
+
     # Find other students who are strong in these subjects
     potential_matches = []
     for ws_name in weak_subjects:
         subj = db.query(Subject).filter(Subject.name == ws_name).first()
         if not subj: continue
-        
+
         strong_students = db.query(Student.full_name, Student.department, func.avg(Mark.marks_obtained/Mark.max_marks*100).label("avg_score"))\
             .join(Mark, Mark.student_id == Student.id)\
             .filter(Mark.subject_id == subj.id, Student.id != student.id)\
             .group_by(Student.id)\
             .having(func.avg(Mark.marks_obtained/Mark.max_marks*100) >= 80)\
             .limit(3).all()
-            
+
         for s in strong_students:
             potential_matches.append({
                 "name": s.full_name,
@@ -71,7 +93,7 @@ async def find_matches(student=Depends(get_current_student), db: Session = Depen
                 "expertise_level": "Expert" if s.avg_score >= 90 else "Advanced",
                 "match_reason": f"They scored {s.avg_score:.0f}% in {ws_name}."
             })
-            
+
     return {"weak_subjects": weak_subjects, "matches": potential_matches[:10]}
 
 # ─── COMPLAINTS ──────────────────────────────────────────────────────────────
@@ -90,17 +112,17 @@ class ComplaintCreate(BaseModel):
 def create_complaint(data: ComplaintCreate, student=Depends(get_current_student), db: Session = Depends(get_db)):
     from backend.services.sentiment_service import sentiment_service
     analysis = sentiment_service.analyze(data.description)
-    
+
     # Auto-escalate if sentiment is highly negative or contains toxic keywords
     urgency = data.urgency
     if analysis["sentiment"] == "Negative" and analysis["score"] > 0.8:
         urgency = "High"
-        
+
     c = Complaint(
-        student_id=student.id, 
-        title=data.title, 
-        description=data.description, 
-        category=data.category, 
+        student_id=student.id,
+        title=data.title,
+        description=data.description,
+        category=data.category,
         urgency=urgency,
         # Store sentiment metadata if possible (need column)
     )
@@ -196,12 +218,12 @@ def get_syllabus(student=Depends(get_current_student), db: Session = Depends(get
 
 # ─── NOTES ───────────────────────────────────────────────────────────────────
 @notes_router.get("/")
-def list_notes(db: Session = Depends(get_db)):
+def list_notes(_=Depends(get_current_user), db: Session = Depends(get_db)):
     notes = db.query(Note).order_by(Note.created_at.desc()).limit(50).all()
     return {"notes": [{"id": n.id, "title": n.title, "file_url": n.file_url, "helpful": n.helpful_count, "not_helpful": n.not_helpful_count} for n in notes]}
 
 @notes_router.post("/{nid}/rate")
-def rate_note(nid: int, helpful: bool = True, db: Session = Depends(get_db)):
+def rate_note(nid: int, helpful: bool = True, _=Depends(get_current_user), db: Session = Depends(get_db)):
     note = db.query(Note).filter(Note.id == nid).first()
     if not note: raise HTTPException(404, "Note not found")
     if helpful: note.helpful_count += 1
@@ -250,8 +272,8 @@ def list_announcements(db: Session = Depends(get_db)):
 
 # ─── FACULTY DIRECTORY ───────────────────────────────────────────────────────
 @faculty_router.get("/directory")
-def faculty_directory(db: Session = Depends(get_db)):
-    return {"faculty": [{"id": f.id, "name": f.name, "department": f.department, "designation": f.designation, "subjects": f.subjects_teaching, "cabin": f.cabin, "email": f.email} for f in db.query(Faculty).filter(Faculty.is_active == True).order_by(Faculty.name).all()]}
+def faculty_directory(_=Depends(get_current_user), db: Session = Depends(get_db)):
+    return {"faculty": [{"id": f.id, "name": f.name, "department": f.department, "designation": f.designation, "subjects": f.subjects_teaching, "cabin": f.cabin, "email": f.email} for f in db.query(Faculty).filter(Faculty.is_active.is_(True)).order_by(Faculty.name).all()]}
 
 # ─── LOST & FOUND ────────────────────────────────────────────────────────────
 @lost_found_router.get("/")
@@ -280,6 +302,6 @@ def my_achievements(student=Depends(get_current_student), db: Session = Depends(
 
 # ─── LEADERBOARD ─────────────────────────────────────────────────────────────
 @leaderboard_router.get("/")
-def leaderboard(db: Session = Depends(get_db)):
-    students = db.query(Student).filter(Student.is_active == True).order_by(Student.merit_points.desc()).limit(25).all()
+def leaderboard(_=Depends(get_current_user), db: Session = Depends(get_db)):
+    students = db.query(Student).filter(Student.is_active.is_(True)).order_by(Student.merit_points.desc()).limit(25).all()
     return {"leaderboard": [{"rank": i+1, "name": s.full_name, "department": s.department, "points": s.merit_points, "tier": s.merit_tier} for i, s in enumerate(students)]}

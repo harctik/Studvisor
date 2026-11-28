@@ -10,7 +10,7 @@ TOXIC_KEYWORDS = [
 ]
 
 DISTRESS_KEYWORDS = [
-    "kill myself", "end it", "hopeless", "can't go on", "goodbye world",
+    "kill myself", "suicide", "suicidal", "end my life", "end it all", "hopeless", "can't go on", "goodbye world",
     "suffering", "depressed", "anxiety", "panic attack", "hurting",
 ]
 
@@ -19,25 +19,29 @@ ACADEMIC_KEYWORDS = [
 ]
 
 
+def _has_phrase(text: str, phrase: str) -> bool:
+    return re.search(rf"\b{re.escape(phrase)}\b", text) is not None
+
+
 class SentimentService:
     def analyze(self, text: str) -> dict:
-        text = text.lower()
-        
+        text = text.lower().replace("\u2019", "'")
+
         # 1. Toxicity check
         toxicity_score = 0.0
-        toxic_matches = [w for w in TOXIC_KEYWORDS if w in text]
+        toxic_matches = [w for w in TOXIC_KEYWORDS if _has_phrase(text, w)]
         if toxic_matches:
             toxicity_score = min(1.0, len(toxic_matches) * 0.2)
-            
+
         # 2. Distress check
         distress_score = 0.0
-        distress_matches = [w for w in DISTRESS_KEYWORDS if w in text]
+        distress_matches = [w for w in DISTRESS_KEYWORDS if _has_phrase(text, w)]
         if distress_matches:
             distress_score = min(1.0, len(distress_matches) * 0.4)
-            
+
         # 3. Categorization
         is_academic = any(w in text for w in ACADEMIC_KEYWORDS)
-        
+
         return {
             "text": text,
             "sentiment": "Negative" if toxicity_score > 0.3 or distress_score > 0.3 else "Neutral",
@@ -46,7 +50,7 @@ class SentimentService:
             "distress_score": distress_score,
             "is_toxic": toxicity_score > 0.4,
             "needs_moderation": toxicity_score > 0.6 or distress_score > 0.5,
-            "is_distress": distress_score > 0.4,
+            "is_distress": bool(distress_matches),
             "category": "academic" if is_academic else "social",
             "flagged_keywords": toxic_matches + distress_matches,
         }

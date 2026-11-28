@@ -1,13 +1,28 @@
 """Placement, Courses, Internships, Campus Modules, WebSocket, Streaming Chat, Export, Admin Analytics."""
+import asyncio
+import csv
+import io
+import json
+import logging
+from typing import Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import Optional, Dict, List
-from backend.core.security import get_current_student, require_role
+
 from backend.app.database import get_db
-from backend.app.models import *
-import json, asyncio, csv, io
+from backend.app.models import (
+    Attendance,
+    AuditLog,
+    CourseEnrollment,
+    Internship,
+    PlacementApplication,
+    PlacementDrive,
+    Subject,
+)
+from backend.core.security import decode_token, get_current_student, get_current_user, require_role
+
+logger = logging.getLogger("Studvisor.routes")
 
 # ─── PLACEMENT ───────────────────────────────────────────────────────────────
 placement_router = APIRouter(prefix="/placement", tags=["Placement"])
@@ -90,34 +105,62 @@ websocket_router = APIRouter(tags=["WebSocket"])
 class ConnectionManager:
     def __init__(self):
         self.active: Dict[int, List[WebSocket]] = {}
-    async def connect(self, ws: WebSocket, uid: int):
-        await ws.accept()
+    def connect(self, ws: WebSocket, uid: int):
         self.active.setdefault(uid, []).append(ws)
     def disconnect(self, ws: WebSocket, uid: int):
         if uid in self.active: self.active[uid] = [w for w in self.active[uid] if w != ws]
     async def send_to_user(self, uid: int, data: dict):
         for ws in self.active.get(uid, []):
             try: await ws.send_json(data)
-            except: pass
+            except Exception: logger.warning("Dropped a websocket message for user %s", uid, exc_info=True)
 
 manager = ConnectionManager()
 
+WS_AUTH_TIMEOUT_SECONDS = 10
+
+
+async def _ws_authenticated(ws: WebSocket, uid: int) -> bool:
+    """The first frame must be {"type": "auth", "token": <student access token for uid>}.
+
+    The token travels in a frame rather than the URL so it stays out of access logs.
+    Student, faculty and admin ids overlap, so only student tokens are accepted.
+    """
+    try:
+        message = json.loads(await asyncio.wait_for(ws.receive_text(), WS_AUTH_TIMEOUT_SECONDS))
+    except (asyncio.TimeoutError, ValueError, KeyError):
+        return False
+    if not isinstance(message, dict) or message.get("type") != "auth" or not isinstance(message.get("token"), str):
+        return False
+    payload = decode_token(message["token"]) or {}
+    return (payload.get("type"), payload.get("role"), payload.get("entity_id")) == ("access", "student", uid)
+
+
 @websocket_router.websocket("/ws/{uid}")
 async def ws_endpoint(ws: WebSocket, uid: int):
-    await manager.connect(ws, uid)
+    await ws.accept()
     try:
+        if not await _ws_authenticated(ws, uid):
+            await ws.close(code=1008)
+            return
+        manager.connect(ws, uid)
+        await ws.send_json({"type": "auth_ok"})
         while True:
-            data = await ws.receive_text()
-            if json.loads(data).get("type") == "ping":
+            try:
+                message = json.loads(await ws.receive_text())
+            except (ValueError, KeyError):
+                continue
+            if isinstance(message, dict) and message.get("type") == "ping":
                 await ws.send_json({"type": "pong"})
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(ws, uid)
 
 # ─── CHAT STREAM ─────────────────────────────────────────────────────────────
 chat_stream_router = APIRouter(prefix="/chat-stream", tags=["AI Stream"])
 
 @chat_stream_router.post("/")
-async def stream_chat(query: str = ""):
+async def stream_chat(query: str = "", _=Depends(get_current_user)):
     async def gen():
         for word in f"AI response to: {query}".split():
             yield f"data: {json.dumps({'token': word + ' '})}\n\n"

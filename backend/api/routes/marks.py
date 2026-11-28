@@ -1,15 +1,16 @@
 """Marks routes — student marks view."""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from backend.core.security import get_current_student
+
 from backend.app.database import get_db
 from backend.app.models import Mark, Subject
+from backend.core.security import get_current_student
 
 router = APIRouter(prefix="/marks", tags=["Marks"])
 
 @router.get("/")
 def get_marks(student=Depends(get_current_student), db: Session = Depends(get_db)):
-    marks = db.query(Mark).filter(Mark.student_id == student.id, Mark.published == True).order_by(Mark.semester, Mark.subject_id).all()
+    marks = db.query(Mark).filter(Mark.student_id == student.id, Mark.published.is_(True)).order_by(Mark.semester, Mark.subject_id).all()
     result = []
     for m in marks:
         subj = db.query(Subject).filter(Subject.id == m.subject_id).first()

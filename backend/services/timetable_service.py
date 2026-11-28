@@ -2,10 +2,12 @@
 Timetable conflict resolver — detects room double-bookings, faculty overlaps,
 and student section clashes. Suggests alternative slots.
 """
-from sqlalchemy.orm import Session
-from collections import defaultdict
 import random
-from backend.app.models import TimetableSlot, Subject, Faculty
+from collections import defaultdict
+
+from sqlalchemy.orm import Session
+
+from backend.app.models import Faculty, Subject, TimetableSlot
 
 
 class TimetableConflictResolver:
@@ -118,7 +120,7 @@ class TimetableConflictResolver:
         # Find which faculty teaches which subject (from subjects_teaching string in Faculty)
         from backend.app.models import Faculty
         faculties = db.query(Faculty).all()
-        
+
         fac_map = {}
         for f in faculties:
             for s_code in (f.subjects_teaching or "").split(","):
@@ -129,22 +131,22 @@ class TimetableConflictResolver:
 
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
         hours = range(1, 6)
-        
+
         created = 0
         for subj in subjects:
             needed = 3 # 3 hours per week
             for day in days:
                 for hour in hours:
                     if needed <= 0: break
-                    
+
                     # Check if slot is free for this section/sem
                     existing = db.query(TimetableSlot).filter(
-                        TimetableSlot.day == day, 
+                        TimetableSlot.day == day,
                         TimetableSlot.hour == hour,
                         TimetableSlot.section == section,
                         TimetableSlot.semester == semester
                     ).first()
-                    
+
                     if not existing:
                         # Check if faculty is free
                         fid = fac_map.get(subj.id)
@@ -155,7 +157,7 @@ class TimetableConflictResolver:
                                 TimetableSlot.faculty_id == fid
                             ).first()
                             if fac_busy: continue
-                        
+
                         db.add(TimetableSlot(
                             subject_id=subj.id,
                             faculty_id=fid,
@@ -168,7 +170,7 @@ class TimetableConflictResolver:
                         needed -= 1
                         created += 1
                 if needed <= 0: break
-        
+
         db.commit()
         return created
 
