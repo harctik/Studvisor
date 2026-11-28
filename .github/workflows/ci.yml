@@ -41,7 +41,10 @@ jobs:
 
       - name: Verify container starts
         run: |
-          docker run -d -p 8000:8000 --name studvisor-test             -e DATABASE_URL=sqlite:///./test.db             -e SECRET_KEY=ci-test-key             studvisor-erp:test
+          docker run -d -p 8000:8000 --name studvisor-test \
+            -e DATABASE_URL=sqlite:///./test.db \
+            -e SECRET_KEY=ci-test-key \
+            studvisor-erp:test
           curl --fail --retry 20 --retry-delay 3 --retry-all-errors http://localhost:8000/health
 
       - name: Show container logs
