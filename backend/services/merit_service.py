@@ -1,6 +1,7 @@
 """Merit/XP service — point awarding, tier calculation, leaderboard."""
 from sqlalchemy.orm import Session
-from backend.app.models import Student, MeritLog
+
+from backend.app.models import MeritLog, Student
 
 TIER_THRESHOLDS = [
     (1000, "Diamond"), (500, "Gold"), (200, "Silver"), (50, "Bronze"), (0, "Novice"),
@@ -71,7 +72,7 @@ class MeritService:
         return {"deducted": points, "total": student.merit_points, "tier": student.merit_tier}
 
     def get_leaderboard(self, db: Session, department: str = None, limit: int = 25) -> list:
-        q = db.query(Student).filter(Student.is_active == True)
+        q = db.query(Student).filter(Student.is_active.is_(True))
         if department:
             q = q.filter(Student.department == department)
         students = q.order_by(Student.merit_points.desc()).limit(limit).all()

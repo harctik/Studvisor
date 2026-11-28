@@ -2,13 +2,12 @@
 Studvisor v2.0 — Complete SQLAlchemy ORM Models
 All tables with proper ForeignKeys, indexes, and audit timestamps.
 """
-from sqlalchemy import (
-    Column, Integer, String, Float, Text, Boolean, DateTime, ForeignKey, Index
-)
-from sqlalchemy.sql import func
 from datetime import datetime
-from backend.app.database import Base
 
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.sql import func
+
+from backend.app.database import Base
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CORE IDENTITY
@@ -297,6 +296,25 @@ class Payment(Base):
     transaction_id = Column(String, nullable=True)
     receipt_url = Column(String, nullable=True)
     paid_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PaymentClaim(Base):
+    """A student's statement that they paid. It changes no balance until an admin approves it."""
+
+    __tablename__ = "payment_claims"
+    institution_id = Column(String, nullable=False, default="default", index=True)
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_fee_id = Column(Integer, ForeignKey("student_fees.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    payment_method = Column(String, nullable=True)
+    transaction_id = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="Pending")  # Pending, Approved, Rejected
+    payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("admins.id"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

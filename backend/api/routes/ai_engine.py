@@ -1,18 +1,18 @@
 """
 v2.0 AI-Powered Routes — Context-aware chat, risk prediction, question paper gen, peer matching.
 """
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 from typing import Optional
-import json, asyncio
 
-from backend.core.security import get_current_student, get_current_faculty, require_role
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from backend.app.database import get_db
-from backend.core.ai_context import build_student_context, build_faculty_context, build_admin_context
-from backend.services.predictive_service import predictive_service
+from backend.core.ai_context import build_student_context
+from backend.core.security import get_current_faculty, get_current_student, require_role
 from backend.services.gamification_service import gamification_service
+from backend.services.predictive_service import predictive_service
 
 router = APIRouter(prefix="/v2/ai", tags=["AI Engine v2"])
 
@@ -49,7 +49,7 @@ async def student_chat_stream(req: ChatRequest, student=Depends(get_current_stud
     """SSE streaming AI chat with context injection."""
     from backend.services.ai_service import ai_service
     system_prompt = build_student_context(db, student.id)
-    
+
     async def generate():
         async for delta in ai_service.chat_stream(system_prompt, req.query):
             yield f"data: {delta}\n\n"
@@ -60,7 +60,7 @@ async def student_chat_stream(req: ChatRequest, student=Depends(get_current_stud
 @router.get("/student/suggestions")
 def chat_suggestions(student=Depends(get_current_student), db: Session = Depends(get_db)):
     """AI-generated contextual question suggestions based on student state."""
-    from backend.app.models import Attendance, Mark
+    from backend.app.models import Attendance
     records = db.query(Attendance).filter(Attendance.student_id == student.id).all()
     total = len(records)
     present = sum(1 for r in records if r.status == "P")
@@ -73,7 +73,7 @@ def chat_suggestions(student=Depends(get_current_student), db: Session = Depends
     ]
 
     if att_pct < 75:
-        suggestions.insert(0, f"How many classes do I need to attend to reach 75%?")
+        suggestions.insert(0, "How many classes do I need to attend to reach 75%?")
         suggestions.append("Can I still get exam eligibility?")
     if att_pct >= 90:
         suggestions.append("Am I safe to take a day off?")
@@ -187,7 +187,6 @@ def my_risk_score(student=Depends(get_current_student), db: Session = Depends(ge
 
 @router.post("/faculty/chat")
 async def faculty_chat(req: ChatRequest, faculty=Depends(get_current_faculty), db: Session = Depends(get_db)):
-    context = build_faculty_context(db, faculty.id)
     return {
         "response": f"[Faculty AI] Analyzing class data for your query: '{req.query}'",
         "ai_provider": "Studvisor-ai-v2",
@@ -197,8 +196,9 @@ async def faculty_chat(req: ChatRequest, faculty=Depends(get_current_faculty), d
 @router.get("/faculty/class-health")
 def class_health(faculty=Depends(get_current_faculty), db: Session = Depends(get_db)):
     """AI summary: which students are at risk in faculty's classes."""
-    from backend.app.models import Subject, Student, Attendance
-    from sqlalchemy import func, case
+    from sqlalchemy import case, func
+
+    from backend.app.models import Attendance, Student, Subject
     subject_codes = [s.strip() for s in (faculty.subjects_teaching or "").split(",") if s.strip()]
     if not subject_codes:
         return {"at_risk_students": [], "total_flagged": 0}
@@ -295,7 +295,6 @@ def admin_risk_dashboard(_=Depends(require_role("admin")), db: Session = Depends
 
 @router.post("/admin/chat")
 def admin_chat(req: ChatRequest, _=Depends(require_role("admin")), db: Session = Depends(get_db)):
-    context = build_admin_context(db)
     return {
         "response": f"[Admin AI] Institutional analysis for: '{req.query}'",
         "ai_provider": "Studvisor-ai-v2",
@@ -310,13 +309,13 @@ class VoiceRequest(BaseModel):
 @router.post("/voice/interact")
 async def voice_interact(req: VoiceRequest, student=Depends(get_current_student), db: Session = Depends(get_db)):
     """Accept voice input, transcribe, process via chatbot, and return audio response."""
-    from backend.services.voice_service import voice_service
     from backend.app.chatbot import process_chat
-    
+    from backend.services.voice_service import voice_service
+
     transcript = await voice_service.transcribe_audio(req.audio_b64)
     ai_text = process_chat(db, student, transcript)
     audio_out = await voice_service.generate_speech(ai_text)
-    
+
     return {
         "transcript": transcript,
         "response_text": ai_text,
@@ -343,17 +342,17 @@ def get_student_pathway(student=Depends(get_current_student), db: Session = Depe
     """AI recommends career paths and recovery steps based on academic performance."""
     from backend.services.predictive_service import predictive_service
     risk = predictive_service.compute_all_risks(db, student.id)
-    
+
     # Analyze marks for "Career Strength"
     from backend.app.models import Mark, Subject
     marks = db.query(Mark).filter(Mark.student_id == student.id).all()
-    
+
     strengths = []
     for m in marks:
         if m.marks_obtained / m.max_marks >= 0.8:
             subj = db.query(Subject).filter(Subject.id == m.subject_id).first()
             if subj: strengths.append(subj.name)
-            
+
     recommendations = []
     if risk["combined_score"] > 0.4:
         recommendations.append({
@@ -362,7 +361,7 @@ def get_student_pathway(student=Depends(get_current_student), db: Session = Depe
             "action": "Focus on attendance in subjects below 75%. Join peer mentoring groups.",
             "xp_reward": 200
         })
-    
+
     if "Mathematics" in strengths or "Data Structures" in strengths:
         recommendations.append({
             "type": "CAREER",
@@ -377,7 +376,7 @@ def get_student_pathway(student=Depends(get_current_student), db: Session = Depe
             "action": "Excellent soft skills detected. Consider joining the Leadership Club.",
             "xp_reward": 300
         })
-        
+
     return {
         "strengths": strengths[:3],
         "risk_level": risk["combined_score"],
@@ -393,20 +392,20 @@ def get_student_pathway(student=Depends(get_current_student), db: Session = Depe
 @router.post("/student/placement-match")
 async def placement_match(student=Depends(get_current_student), db: Session = Depends(get_db)):
     """AI matches student profile with open placement drives."""
-    from backend.app.models import PlacementDrive, Mark, Subject
+    from backend.app.models import Mark, PlacementDrive
     from backend.services.ai_service import ai_service
-    
+
     drives = db.query(PlacementDrive).filter(PlacementDrive.status == "Open").all()
     marks = db.query(Mark).filter(Mark.student_id == student.id).all()
-    
+
     # Simple heuristic + AI for the best match
     profile_summary = f"Student in {student.department}, CGPA logic, marks in {len(marks)} subjects."
-    
+
     matches = []
     for d in drives:
         # Basic eligibility check
         eligible = student.department in (d.eligible_departments or "")
-        
+
         if eligible:
             ai_critique = await ai_service.chat(
                 f"Student Profile: {profile_summary}. Job: {d.company_name} - {d.role_title}. Requirements: CGPA {d.eligibility_cgpa}.",
@@ -419,7 +418,7 @@ async def placement_match(student=Depends(get_current_student), db: Session = De
                 "ai_fit_analysis": ai_critique,
                 "eligible": True
             })
-            
+
     return {"matches": sorted(matches, key=lambda x: x["package"], reverse=True)}
 
 
@@ -460,7 +459,7 @@ def check_plagiarism(assignment_id: int, faculty=Depends(get_current_faculty), d
 @router.get("/faculty/attendance-anomalies")
 def attendance_anomalies(faculty=Depends(get_current_faculty), db: Session = Depends(get_db)):
     """Detect students with sudden attendance drops in faculty's subjects."""
-    from backend.app.models import Subject, Student, Attendance
+    from backend.app.models import Attendance, Student, Subject
 
     subject_codes = [s.strip() for s in (faculty.subjects_teaching or "").split(",") if s.strip()]
     if not subject_codes:
@@ -479,8 +478,6 @@ def attendance_anomalies(faculty=Depends(get_current_faculty), db: Session = Dep
     )
 
     # Group in Python
-    from itertools import groupby
-    from operator import attrgetter
 
     grouped: dict = {}
     for r in all_records:
@@ -517,7 +514,7 @@ def attendance_anomalies(faculty=Depends(get_current_faculty), db: Session = Dep
 @router.get("/faculty/exam-readiness/{subject_code}")
 def exam_readiness(subject_code: str, faculty=Depends(get_current_faculty), db: Session = Depends(get_db)):
     """Predict class performance on upcoming exam based on CIA scores."""
-    from backend.app.models import Subject, Student, Mark
+    from backend.app.models import Mark, Student, Subject
     subject = db.query(Subject).filter(Subject.code == subject_code).first()
     if not subject:
         from fastapi import HTTPException
@@ -531,7 +528,6 @@ def exam_readiness(subject_code: str, faculty=Depends(get_current_faculty), db: 
         student_avg[m.student_id].append(m.marks_obtained / m.max_marks * 100 if m.max_marks > 0 else 0)
 
     # Bulk-fetch all student names in one query instead of one-per-student
-    from backend.app.models import Student
     all_sids = list(student_avg.keys())
     student_map = {s.id: s.full_name for s in db.query(Student).filter(Student.id.in_(all_sids)).all()}
 

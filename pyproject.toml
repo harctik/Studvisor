@@ -7,10 +7,22 @@ requires-python = ">=3.11"
 [tool.ruff]
 target-version = "py311"
 line-length = 120
-select = ["E", "F", "I", "W"]
-ignore = ["E501"]
 
-[tool.ruff.isort]
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+# Layout-only rules that the existing compact style does not follow. None of them hides a bug.
+ignore = [
+    "E501",  # line too long
+    "E701",  # statement on the same line as its colon
+    "E702",  # statements separated by semicolons
+    "E741",  # single-letter name "l", used for leave and list rows
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The app configures middleware before importing routers on purpose.
+"backend/main.py" = ["E402"]
+
+[tool.ruff.lint.isort]
 known-first-party = ["backend"]
 
 [tool.pytest.ini_options]

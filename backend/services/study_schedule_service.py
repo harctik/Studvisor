@@ -2,10 +2,12 @@
 Study schedule generator — AI-powered personalized day-by-day study plan.
 Weighted by: uncovered topics × exam weight × days remaining.
 """
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from backend.app.models import Student, Subject, SyllabusTopic, ExamSchedule, Attendance
 from collections import defaultdict
+from datetime import datetime, timedelta
+
+from sqlalchemy.orm import Session
+
+from backend.app.models import Attendance, ExamSchedule, Student, Subject, SyllabusTopic
 
 
 class StudyScheduleGenerator:
@@ -40,7 +42,7 @@ class StudyScheduleGenerator:
             try:
                 exam_date = datetime.strptime(exam.exam_date, "%Y-%m-%d")
                 days_left = max((exam_date - today).days, 1)
-            except:
+            except (ValueError, TypeError):
                 days_left = 14
 
             # Attendance check (lower attendance = more review needed)

@@ -1,16 +1,24 @@
 """PDF Reports, Library, Placement, Courses, Internships, Campus Modules, WebSocket, Chat Stream, Export, Admin Analytics — all remaining route files."""
 
 # ─── REPORTS ─────────────────────────────────────────────────────────────────
+import random
+from datetime import datetime
+from html import escape
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
-from datetime import datetime
-import random
-from backend.core.security import get_current_student
+
 from backend.app.database import get_db
 from backend.app.models import Student
+from backend.core.security import get_current_student
 
 reports_router = APIRouter(prefix="/reports", tags=["Reports"])
+
+def _esc(value) -> str:
+    """Escape a stored value before it goes into report HTML."""
+    return escape(str(value))
+
 
 def get_premium_style():
     return """
@@ -18,13 +26,13 @@ def get_premium_style():
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@300;400;600&display=swap');
         :root { --primary: #6366f1; --secondary: #a855f7; --dark: #0f172a; --bg: #f8fafc; }
         body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--dark); padding: 40px; display: flex; justify-content: center; }
-        .certificate { 
-            background: white; width: 800px; padding: 60px; border-radius: 24px; 
+        .certificate {
+            background: white; width: 800px; padding: 60px; border-radius: 24px;
             box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1); border: 1px solid rgba(255,255,255,0.2);
             position: relative; overflow: hidden;
         }
-        .certificate::before { 
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 8px; 
+        .certificate::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 8px;
             background: linear-gradient(90deg, var(--primary), var(--secondary));
         }
         .header { text-align: center; margin-bottom: 40px; }
@@ -49,12 +57,12 @@ def marksheet(student_id: int, current=Depends(get_current_student), db: Session
         raise HTTPException(status_code=403, detail="Cannot access another student's report")
     s = db.query(Student).filter(Student.id == student_id).first()
     from backend.app.models import Mark, Subject
-    marks = db.query(Mark).filter(Mark.student_id == student_id, Mark.published == True).all()
-    
+    marks = db.query(Mark).filter(Mark.student_id == student_id, Mark.published.is_(True)).all()
+
     rows = ""
     for m in marks:
         subj = db.query(Subject).filter(Subject.id == m.subject_id).first()
-        rows += f"<tr><td>{subj.code if subj else '?'}</td><td>{subj.name if subj else '?'}</td><td>{m.assessment_type}</td><td>{m.marks_obtained}/{m.max_marks}</td></tr>"
+        rows += f"<tr><td>{_esc(subj.code if subj else '?')}</td><td>{_esc(subj.name if subj else '?')}</td><td>{_esc(m.assessment_type)}</td><td>{m.marks_obtained}/{m.max_marks}</td></tr>"
 
     return f"""
     <html>
@@ -68,8 +76,8 @@ def marksheet(student_id: int, current=Depends(get_current_student), db: Session
             </div>
             <div class="content">
                 This is to certify the academic performance of
-                <span class="student-name">{s.full_name}</span>
-                ID: {s.roll_number} | Department: {s.department}
+                <span class="student-name">{_esc(s.full_name)}</span>
+                ID: {_esc(s.roll_number)} | Department: {_esc(s.department)}
                 <table>
                     <thead><tr><th>Code</th><th>Subject</th><th>Type</th><th>Score</th></tr></thead>
                     <tbody>{rows or '<tr><td colspan="4" style="text-align:center">No records found</td></tr>'}</tbody>
@@ -107,9 +115,9 @@ def bonafide(student_id: int, current=Depends(get_current_student), db: Session 
                 <h1>Bonafide Certificate</h1>
             </div>
             <div class="content">
-                <p>This is to certify that <b>{s.full_name}</b>, daughter/son of the institution, 
-                is a bonafide student of this college, currently pursuing 
-                <b>Semester {s.semester}</b> in the <b>Department of {s.department}</b>.</p>
+                <p>This is to certify that <b>{_esc(s.full_name)}</b>, daughter/son of the institution,
+                is a bonafide student of this college, currently pursuing
+                <b>Semester {_esc(s.semester)}</b> in the <b>Department of {_esc(s.department)}</b>.</p>
                 <p>Their conduct during the period of study has been exemplary.</p>
             </div>
             <div class="footer">
@@ -132,7 +140,7 @@ def attendance_cert(student_id: int, current=Depends(get_current_student), db: S
     from backend.app.models import Attendance
     recs = db.query(Attendance).filter(Attendance.student_id == student_id).all()
     pct = round(sum(1 for r in recs if r.status == "P") / len(recs) * 100, 1) if recs else 0
-    
+
     return f"""
     <html>
     <head>{get_premium_style()}</head>
@@ -144,9 +152,9 @@ def attendance_cert(student_id: int, current=Depends(get_current_student), db: S
                 <h1>Attendance Participation Certificate</h1>
             </div>
             <div class="content">
-                <p>This document verifies that <b>{s.full_name}</b> has maintained an aggregate attendance of</p>
+                <p>This document verifies that <b>{_esc(s.full_name)}</b> has maintained an aggregate attendance of</p>
                 <div style="font-size: 48px; font-weight: 700; color: var(--primary); margin: 20px 0;">{pct}%</div>
-                <p>for the current academic semester. This meets the minimum eligibility requirements 
+                <p>for the current academic semester. This meets the minimum eligibility requirements
                 for university examination participation.</p>
             </div>
             <div class="footer">
@@ -168,11 +176,11 @@ def fee_receipt(student_id: int, current=Depends(get_current_student), db: Sessi
     s = db.query(Student).filter(Student.id == student_id).first()
     from backend.app.models import StudentFee
     fees = db.query(StudentFee).filter(StudentFee.student_id == student_id).all()
-    
+
     rows = ""
     total_paid = 0
     for f in fees:
-        rows += f"<tr><td>{f.status}</td><td>{f.amount_due}</td><td>{f.amount_paid}</td><td>{f.due_date}</td></tr>"
+        rows += f"<tr><td>{_esc(f.status)}</td><td>{f.amount_due}</td><td>{f.amount_paid}</td><td>{_esc(f.due_date)}</td></tr>"
         total_paid += f.amount_paid
 
     return f"""
@@ -186,7 +194,7 @@ def fee_receipt(student_id: int, current=Depends(get_current_student), db: Sessi
                 <h1>Fee Payment Receipt</h1>
             </div>
             <div class="content">
-                <p>Acknowledgment of payment received from <b>{s.full_name}</b> ({s.roll_number}).</p>
+                <p>Acknowledgment of payment received from <b>{_esc(s.full_name)}</b> ({_esc(s.roll_number)}).</p>
                 <table>
                     <thead><tr><th>Fee Type</th><th>Due</th><th>Paid</th><th>Deadline</th></tr></thead>
                     <tbody>{rows or '<tr><td colspan="4">No records</td></tr>'}</tbody>

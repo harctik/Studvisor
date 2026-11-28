@@ -1,7 +1,9 @@
 """Fee management service — payment processing, overdue detection, receipt generation."""
-from sqlalchemy.orm import Session
 from datetime import datetime
-from backend.app.models import FeeStructure, StudentFee, Payment, Student
+
+from sqlalchemy.orm import Session
+
+from backend.app.models import Payment, Student, StudentFee
 from backend.services.notification_service import notification_dispatcher
 
 

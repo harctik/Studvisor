@@ -1,7 +1,9 @@
 """CRUD operations for database models."""
 from sqlalchemy.orm import Session
-from .models import Student
+
 from backend.core.security import hash_password
+
+from .models import Student
 
 
 def get_student_by_username(db: Session, username: str):

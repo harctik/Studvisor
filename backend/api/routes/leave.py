@@ -1,10 +1,11 @@
 """Leave management routes."""
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from backend.core.security import get_current_student
+from sqlalchemy.orm import Session
+
 from backend.app.database import get_db
 from backend.app.models import LeaveRequest
+from backend.core.security import get_current_student
 
 router = APIRouter(prefix="/leave", tags=["Leave"])
 

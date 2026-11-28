@@ -2,10 +2,11 @@
 Studvisor v2.0 — Centralized configuration using pydantic-settings.
 Single source of truth for all environment variables.
 """
+from functools import lru_cache
+from typing import Optional
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
-from typing import Optional
-from functools import lru_cache
 
 
 class Settings(BaseSettings):

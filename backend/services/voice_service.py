@@ -2,8 +2,8 @@
 Voice Intelligence Service — handles STT (Speech-to-Text) and TTS (Text-to-Speech) hooks.
 Note: In production, this would integrate with Whisper/Google Cloud Speech.
 """
-import base64
 import random
+
 
 class VoiceService:
     async def transcribe_audio(self, audio_data_base64: str) -> str:
@@ -13,7 +13,7 @@ class VoiceService:
         # Simulate processing time
         import asyncio
         await asyncio.sleep(0.5)
-        
+
         # Mock responses for demo
         samples = [
             "What is my current attendance in mathematics?",

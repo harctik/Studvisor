@@ -1,4 +1,3 @@
-import re
 
 with open("d:/Studvisor/backend/app/models.py", "r", encoding="utf-8") as f:
     lines = f.readlines()
